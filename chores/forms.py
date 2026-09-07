@@ -3,7 +3,7 @@
 from django import forms
 from django.utils import timezone
 
-from chores.models import Payout
+from chores.models import Chore, Payout
 from chores.payouts import PayoutValidationError, record_payout, validate_payout
 
 
@@ -50,3 +50,45 @@ class PayoutForm(forms.ModelForm):
             self.cleaned_data["amount"],
             self.cleaned_data.get("paid_on") or timezone.localdate(),
         )
+
+
+class ChoreForm(forms.ModelForm):
+    class Meta:
+        model = Chore
+        fields = [
+            "title",
+            "notes",
+            "category",
+            "priority",
+            "due_at",
+            "reward_amount",
+            "assigned_child",
+            "is_shared",
+        ]
+        widgets = {
+            "due_at": forms.DateTimeInput(
+                format="%Y-%m-%dT%H:%M",
+                attrs={"type": "datetime-local"},
+            )
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["due_at"].input_formats = [
+            "%Y-%m-%dT%H:%M",
+            "%Y-%m-%d %H:%M:%S%z",
+            "%Y-%m-%d %H:%M:%S",
+        ]
+        self.fields["reward_amount"].required = False
+
+    def clean_due_at(self):
+        due_at = self.cleaned_data.get("due_at")
+        if due_at is not None and due_at < timezone.now():
+            raise forms.ValidationError("Due date/time cannot be in the past.")
+        return due_at
+
+    def clean_reward_amount(self):
+        reward = self.cleaned_data.get("reward_amount")
+        if reward is not None and reward < 0:
+            raise forms.ValidationError("Reward cannot be negative.")
+        return reward

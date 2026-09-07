@@ -15,6 +15,7 @@ from .modes import (
     parent_mode_required,
     set_mode,
 )
+from .forms import ChoreForm
 from .models import (
     Child,
     Chore,
@@ -109,6 +110,48 @@ def family_board(request):
     )
     patch_vary_headers(response, ["Cookie"])
     return response
+
+
+def _editor_redirect(request):
+    candidate = request.POST.get("next") or request.GET.get("next")
+    if candidate and url_has_allowed_host_and_scheme(
+        candidate,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(candidate)
+    return redirect("chores:family_board")
+
+
+@require_http_methods(["GET", "POST"])
+@parent_mode_required
+def chore_create(request):
+    form = ChoreForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        chore = form.save(commit=False)
+        chore.recurrence_rule = None
+        chore.save()
+        return _editor_redirect(request)
+    return render(
+        request,
+        "chores/chore_form.html",
+        {"form": form, "heading": "Create chore", "submit_label": "Create chore"},
+    )
+
+
+@require_http_methods(["GET", "POST"])
+@parent_mode_required
+def chore_edit(request, chore_id):
+    chore = get_object_or_404(Chore, pk=chore_id, recurrence_rule__isnull=True)
+    form = ChoreForm(request.POST or None, instance=chore)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        return _editor_redirect(request)
+    return render(
+        request,
+        "chores/chore_form.html",
+        {"form": form, "heading": "Edit chore", "submit_label": "Save changes", "chore": chore},
+    )
 
 
 def _bad_domain_request(message):
