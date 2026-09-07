@@ -12,6 +12,8 @@ timezone-aware.
 
 from django.db import models
 
+from chores import state_machine
+
 
 class Child(models.Model):
     """A child in the household.
@@ -229,6 +231,37 @@ class Chore(models.Model):
     def __str__(self):
         # Uses only local columns, so it never triggers an extra query.
         return f"{self.title} ({self.status})"
+
+    # -- Status transitions ------------------------------------------------
+    #
+    # Thin delegations only. Which transitions are legal, what each one
+    # writes and what it raises all live in ``chores.state_machine``; not one
+    # rule is restated here. Each method mutates and saves ``self``, so no
+    # caller ever needs ``save()``, and each returns ``None``.
+
+    def claim(self, child):
+        """Take this chore on: ``available``/``returned`` -> ``claimed``."""
+        state_machine.claim(self, child)
+
+    def complete(self):
+        """Hand it in: ``claimed`` -> ``awaiting_approval``."""
+        state_machine.complete(self)
+
+    def approve(self):
+        """Sign it off: ``awaiting_approval`` -> ``approved`` (terminal)."""
+        state_machine.approve(self)
+
+    def reject(self, reason):
+        """Send it back: ``awaiting_approval`` -> ``returned``, with a reason."""
+        state_machine.reject(self, reason)
+
+    def release(self):
+        """Give it back: ``claimed``/``returned`` -> ``available``."""
+        state_machine.release(self)
+
+    def allowed_actions(self, child=None):
+        """Action names legal right now, for deciding which buttons to show."""
+        return state_machine.allowed_actions(self, child)
 
 
 class Payout(models.Model):
