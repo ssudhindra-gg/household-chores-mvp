@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Family Chore Board</title></head>
+  <body>
+    <main>
+      <h1>Family Chore Board</h1>
+      <p>Current mode: <strong>{{ current_mode|title }} Mode</strong></p>
+
+      <form method="get" action="{% url 'family_board' %}">
+        <label>Child
+          <select name="child">
+            <option value="">All children</option>
+            {% for child in children %}
+              <option value="{{ child.pk }}"{% if selected.child == child.pk|stringformat:'s' %} selected{% endif %}>{{ child.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Category
+          <select name="category">
+            <option value="">All categories</option>
+            {% for value, label in categories %}
+              <option value="{{ value }}"{% if selected.category == value %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Status
+          <select name="status">
+            <option value="">All statuses</option>
+            {% for value, label in statuses %}
+              <option value="{{ value }}"{% if selected.status == value %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Priority
+          <select name="priority">
+            <option value="">All priorities</option>
+            {% for value, label in priorities %}
+              <option value="{{ value }}"{% if selected.priority == value %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit">Filter</button>
+      </form>
+
+      {% if chores %}
+        <table>
+          <thead>
+            <tr><th>Title</th><th>Category</th><th>Priority</th><th>Status</th><th>Assigned child</th><th>Reward</th></tr>
+          </thead>
+          <tbody>
+            {% for chore in chores %}
+              <tr>
+                <td>{{ chore.title }}</td>
+                <td>{{ chore.get_category_display }}</td>
+                <td>{{ chore.get_priority_display }}</td>
+                <td>{{ chore.get_status_display }}</td>
+                <td>{% if chore.assigned_child %}{{ chore.assigned_child.name }}{% else %}Unassigned/shared{% endif %}</td>
+                <td>{% if chore.reward_amount is not None %}{{ chore.reward_amount }}{% else %}Unpaid{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p>No chores match these filters.</p>
+      {% endif %}
+    </main>
+  </body>
+</html>

@@ -14,7 +14,14 @@ from .modes import (
     parent_mode_required,
     set_mode,
 )
-from .models import Child, Chore, ChoreRequest
+from .models import (
+    Child,
+    Chore,
+    ChoreCategory,
+    ChorePriority,
+    ChoreRequest,
+    ChoreStatus,
+)
 from .payouts import record_payout
 from .state_machine import InvalidChoreTransition
 
@@ -36,6 +43,49 @@ def mode_switch(request):
         request,
         "chores/mode_switch.html",
         {"current_mode": current_mode(request), "parent_mode": PARENT_MODE, "kid_mode": KID_MODE},
+    )
+
+
+@require_GET
+def family_board(request):
+    chores = Chore.objects.select_related("assigned_child").all()
+
+    child_filter = request.GET.get("child", "")
+    if child_filter:
+        try:
+            chores = chores.filter(assigned_child_id=int(child_filter))
+        except (TypeError, ValueError):
+            pass
+
+    category_filter = request.GET.get("category", "")
+    if category_filter in {value for value, _label in ChoreCategory.choices}:
+        chores = chores.filter(category=category_filter)
+
+    status_filter = request.GET.get("status", "")
+    if status_filter in {value for value, _label in ChoreStatus.choices}:
+        chores = chores.filter(status=status_filter)
+
+    priority_filter = request.GET.get("priority", "")
+    if priority_filter in {value for value, _label in ChorePriority.choices}:
+        chores = chores.filter(priority=priority_filter)
+
+    return render(
+        request,
+        "chores/family_board.html",
+        {
+            "chores": chores,
+            "children": Child.objects.all(),
+            "categories": ChoreCategory.choices,
+            "statuses": ChoreStatus.choices,
+            "priorities": ChorePriority.choices,
+            "selected": {
+                "child": child_filter,
+                "category": category_filter,
+                "status": status_filter,
+                "priority": priority_filter,
+            },
+            "current_mode": current_mode(request),
+        },
     )
 
 

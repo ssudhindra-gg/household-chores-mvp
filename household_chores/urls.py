@@ -24,6 +24,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("mode/", views.mode_switch, name="mode_switch"),
     path("mode/set/", views.set_session_mode, name="set_session_mode"),
+    path("board/", views.family_board, name="family_board"),
     path("chores/<int:chore_id>/claim/", views.claim_chore, name="claim_chore"),
     path("chores/<int:chore_id>/complete/", views.complete_chore, name="complete_chore"),
     path("chores/<int:chore_id>/approve/", views.approve_chore, name="approve_chore"),
