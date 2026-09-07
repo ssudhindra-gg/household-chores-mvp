@@ -264,13 +264,18 @@ class Chore(models.Model):
         return state_machine.allowed_actions(self, child)
 
 
+class PayoutImmutable(Exception):
+    """Raised whenever an existing payout would be edited or deleted."""
+
+
 class PayoutQuerySet(models.QuerySet):
     """A payout history cannot be removed in bulk."""
 
-    def delete(self, *args, **kwargs):
-        from chores.payouts import PayoutImmutableError
+    def update(self, *args, **kwargs):
+        raise PayoutImmutable("Payouts are append-only and cannot be edited")
 
-        raise PayoutImmutableError("Payouts are append-only and cannot be deleted")
+    def delete(self, *args, **kwargs):
+        raise PayoutImmutable("Payouts are append-only and cannot be deleted")
 
 
 class PayoutManager(models.Manager.from_queryset(PayoutQuerySet)):
@@ -312,15 +317,11 @@ class Payout(models.Model):
 
     def save(self, *args, **kwargs):
         if not self._state.adding:
-            from chores.payouts import PayoutImmutableError
-
-            raise PayoutImmutableError("Payouts are append-only and cannot be edited")
+            raise PayoutImmutable("Payouts are append-only and cannot be edited")
         return super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        from chores.payouts import PayoutImmutableError
-
-        raise PayoutImmutableError("Payouts are append-only and cannot be deleted")
+        raise PayoutImmutable("Payouts are append-only and cannot be deleted")
 
 
 class ChoreRequest(models.Model):

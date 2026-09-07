@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http import HttpResponseBadRequest
@@ -152,8 +154,14 @@ def reject_chore(request, chore_id):
 @parent_mode_required
 def record_child_payout(request):
     child = get_object_or_404(Child, pk=request.POST.get("child_id"))
+    paid_on = request.POST.get("paid_on")
+    if paid_on:
+        try:
+            paid_on = date.fromisoformat(paid_on)
+        except ValueError:
+            pass
     try:
-        record_payout(child, request.POST.get("amount"), request.POST.get("paid_on"))
+        record_payout(child, request.POST.get("amount"), paid_on)
     except ValidationError as exc:
         return _bad_domain_request(str(exc))
     return redirect(_next_url(request))
