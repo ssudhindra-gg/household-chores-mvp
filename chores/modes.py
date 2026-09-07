@@ -5,6 +5,10 @@ authorisation. Anyone can switch modes without credentials, and a child can
 act as a sibling. Nothing secret is behind this flag. Django Admin is outside
 this system and remains protected by its real staff login; mode guards never
 decorate Admin actions.
+
+If cookies are unavailable, there is no fallback: each request is Parent Mode
+and the CSRF-protected switch cannot carry a mode forward. The module reads no
+local storage, query parameter, or alternate client-side state.
 """
 
 from enum import Enum
