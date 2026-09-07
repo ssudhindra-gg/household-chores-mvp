@@ -1,0 +1,31 @@
+{% extends "chores/base.html" %}
+
+{% block title %}Choose Mode | Household Chores{% endblock %}
+
+{% block content %}
+  <main>
+    <h1>Choose a mode</h1>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <p data-current-mode="{% if is_parent_mode %}parent{% else %}kid{% endif %}">
+      {% if is_parent_mode %}Parent Mode is active.{% else %}Kid Mode is active{% if current_child %} for {{ current_child.name }}{% endif %}.{% endif %}
+    </p>
+    <form method="post" action="{% url 'chores:mode_select' %}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <button type="submit" name="mode" value="parent">Parent Mode</button>
+    </form>
+    {% if children %}
+      <h2>Kid Mode</h2>
+      {% for child in children %}
+        <form method="post" action="{% url 'chores:mode_select' %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <input type="hidden" name="mode" value="kid">
+          <button type="submit" name="child" value="{{ child.pk }}">Kid Mode: {{ child.name }}</button>
+        </form>
+      {% endfor %}
+    {% else %}
+      <p>No children exist yet. Add one before entering Kid Mode.</p>
+    {% endif %}
+  </main>
+{% endblock %}

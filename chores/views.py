@@ -1,17 +1,16 @@
 from datetime import date
 
-from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.cache import patch_vary_headers
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .modes import (
-    KID_MODE,
-    PARENT_MODE,
-    current_mode,
+    Mode,
+    current_child,
     kid_mode_required,
     parent_mode_required,
     set_mode,
@@ -36,16 +35,36 @@ def _next_url(request):
         require_https=request.is_secure(),
     ):
         return candidate
-    return reverse("mode_switch")
+    return reverse("chores:mode_select")
 
 
-@require_GET
-def mode_switch(request):
-    return render(
+@require_http_methods(["GET", "POST"])
+def mode_select(request):
+    error = None
+    if request.method == "POST":
+        mode = request.POST.get("mode")
+        if mode not in (Mode.PARENT.value, Mode.KID.value):
+            return HttpResponseBadRequest("mode must be 'parent' or 'kid'")
+        child = request.POST.get("child") if mode == Mode.KID.value else None
+        try:
+            set_mode(request, mode, child=child)
+        except ValueError:
+            error = "Choose a child before entering Kid Mode."
+        else:
+            return redirect(_next_url(request))
+
+    response = render(
         request,
-        "chores/mode_switch.html",
-        {"current_mode": current_mode(request), "parent_mode": PARENT_MODE, "kid_mode": KID_MODE},
+        "chores/mode_select.html",
+        {"children": Child.objects.all(), "error": error, "acting_child": current_child(request)},
     )
+    patch_vary_headers(response, ["Cookie"])
+    return response
+
+
+# Legacy route aliases retained while the app's canonical route is chores:mode_select.
+mode_switch = mode_select
+set_session_mode = mode_select
 
 
 @require_GET
@@ -71,7 +90,7 @@ def family_board(request):
     if priority_filter in {value for value, _label in ChorePriority.choices}:
         chores = chores.filter(priority=priority_filter)
 
-    return render(
+    response = render(
         request,
         "chores/family_board.html",
         {
@@ -86,19 +105,10 @@ def family_board(request):
                 "status": status_filter,
                 "priority": priority_filter,
             },
-            "current_mode": current_mode(request),
         },
     )
-
-
-@require_POST
-def set_session_mode(request):
-    mode = request.POST.get("mode")
-    if mode not in (PARENT_MODE, KID_MODE):
-        return HttpResponseBadRequest("mode must be 'parent' or 'kid'")
-    set_mode(request, mode)
-    messages.success(request, f"Switched to {'Parent' if mode == PARENT_MODE else 'Kid'} Mode.")
-    return redirect(_next_url(request))
+    patch_vary_headers(response, ["Cookie"])
+    return response
 
 
 def _bad_domain_request(message):

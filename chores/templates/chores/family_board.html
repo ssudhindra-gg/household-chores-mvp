@@ -1,12 +1,12 @@
-<!doctype html>
-<html lang="en">
-  <head><meta charset="utf-8"><title>Family Chore Board</title></head>
-  <body>
+{% extends "chores/base.html" %}
+
+{% block title %}Family Chore Board{% endblock %}
+
+{% block content %}
     <main>
       <h1>Family Chore Board</h1>
-      <p>Current mode: <strong>{{ current_mode|title }} Mode</strong></p>
 
-      <form method="get" action="{% url 'family_board' %}">
+      <form method="get" action="{% url 'chores:family_board' %}">
         <label>Child
           <select name="child">
             <option value="">All children</option>
@@ -64,5 +64,4 @@
         <p>No chores match these filters.</p>
       {% endif %}
     </main>
-  </body>
-</html>
+{% endblock %}

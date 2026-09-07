@@ -35,7 +35,7 @@ class FamilyBoardTests(TestCase):
         )
 
     def get_board(self, query=""):
-        return self.client.get(reverse("family_board") + query)
+        return self.client.get(reverse("chores:family_board") + query)
 
     def test_board_lists_all_required_fields_and_unpaid_label(self):
         response = self.get_board()
@@ -90,7 +90,9 @@ class FamilyBoardTests(TestCase):
 
     def test_parent_and_kid_sessions_see_the_same_board(self):
         parent = self.get_board()
-        self.client.post(reverse("set_session_mode"), {"mode": "kid"})
+        self.client.post(
+            reverse("chores:mode_select"), {"mode": "kid", "child": self.ana.pk}
+        )
         kid = self.get_board()
 
         for title in ("Wash dishes", "Fold laundry", "Sweep porch"):
