@@ -115,16 +115,31 @@ def _bad_domain_request(message):
     return HttpResponseBadRequest(message)
 
 
+def _action_error(request, message):
+    if request.htmx:
+        response = render(request, "chores/_action_error.html", {"message": message})
+        response["HX-Retarget"] = "#messages"
+        response["HX-Reswap"] = "innerHTML"
+        return response
+    return HttpResponseBadRequest(message)
+
+
+def _action_success(request, chore):
+    if request.htmx:
+        return render(request, "chores/_chore_row.html", {"chore": chore})
+    return redirect(_next_url(request))
+
+
 @require_POST
 @kid_mode_required
 def claim_chore(request, chore_id):
     chore = get_object_or_404(Chore, pk=chore_id)
-    child = get_object_or_404(Child, pk=request.POST.get("child_id"))
+    child = request.acting_child
     try:
         chore.claim(child)
     except (InvalidChoreTransition, ValidationError) as exc:
-        return _bad_domain_request(str(exc))
-    return redirect(_next_url(request))
+        return _action_error(request, str(exc))
+    return _action_success(request, chore)
 
 
 @require_POST
@@ -134,8 +149,8 @@ def complete_chore(request, chore_id):
     try:
         chore.complete()
     except (InvalidChoreTransition, ValidationError) as exc:
-        return _bad_domain_request(str(exc))
-    return redirect(_next_url(request))
+        return _action_error(request, str(exc))
+    return _action_success(request, chore)
 
 
 @require_POST

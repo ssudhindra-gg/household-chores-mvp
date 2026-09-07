@@ -45,19 +45,10 @@
       {% if chores %}
         <table>
           <thead>
-            <tr><th>Title</th><th>Category</th><th>Priority</th><th>Status</th><th>Assigned child</th><th>Reward</th></tr>
+            <tr><th>Title</th><th>Category</th><th>Priority</th><th>Status</th><th>Assigned child</th><th>Reward</th><th>Actions</th></tr>
           </thead>
           <tbody>
-            {% for chore in chores %}
-              <tr>
-                <td>{{ chore.title }}</td>
-                <td>{{ chore.get_category_display }}</td>
-                <td>{{ chore.get_priority_display }}</td>
-                <td>{{ chore.get_status_display }}</td>
-                <td>{% if chore.assigned_child %}{{ chore.assigned_child.name }}{% else %}Unassigned/shared{% endif %}</td>
-                <td>{% if chore.reward_amount is not None %}{{ chore.reward_amount }}{% else %}Unpaid{% endif %}</td>
-              </tr>
-            {% endfor %}
+            {% for chore in chores %}{% include "chores/_chore_row.html" %}{% endfor %}
           </tbody>
         </table>
       {% else %}
