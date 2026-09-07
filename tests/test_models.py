@@ -444,10 +444,19 @@ class AdminRegistrationTests(TestCase):
                 response = self.client.get(admin_url(model, "add"))
                 self.assertEqual(response.status_code, 200)
 
-    def test_registration_is_plain(self):
+    def test_registration_is_plain_except_for_the_parent_chore_admin(self):
         for model in DOMAIN_MODELS:
             with self.subTest(model=model.__name__):
                 model_admin = django_admin.site._registry[model]
+                if model is Chore:
+                    self.assertEqual(
+                        tuple(model_admin.list_filter),
+                        ("status", "assigned_child", "category"),
+                    )
+                    self.assertIn("assigned_child__name", model_admin.search_fields)
+                    self.assertIn("approve_selected", model_admin.actions)
+                    self.assertIn("reject_selected", model_admin.actions)
+                    continue
                 self.assertEqual(tuple(model_admin.list_filter), ())
                 self.assertEqual(tuple(model_admin.search_fields), ())
                 self.assertEqual(tuple(model_admin.actions or ()), ())

@@ -1,0 +1,20 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <h1>Reject selected chores</h1>
+  <p>Enter one reason to return every selected chore to the board.</p>
+  <ul>
+    {% for chore in queryset %}<li>{{ chore }}</li>{% endfor %}
+  </ul>
+  <form method="post">
+    {% csrf_token %}
+    {% for selected_id in selected_ids %}
+      <input type="hidden" name="_selected_action" value="{{ selected_id }}">
+    {% endfor %}
+    <input type="hidden" name="action" value="reject_selected">
+    <input type="hidden" name="apply" value="1">
+    {{ form.as_p }}
+    <button type="submit">Reject selected chores</button>
+    <a href="{% url 'admin:chores_chore_changelist' %}">Cancel</a>
+  </form>
+{% endblock %}

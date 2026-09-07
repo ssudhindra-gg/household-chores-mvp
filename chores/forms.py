@@ -252,3 +252,16 @@ class ChoreForm(forms.ModelForm):
                 chore.recurrence_rule = None
             chore.save()
         return chore
+
+
+class RejectSelectedForm(forms.Form):
+    reason = forms.CharField(
+        label="Rejection reason",
+        widget=forms.Textarea(attrs={"rows": 4}),
+    )
+
+    def clean_reason(self):
+        reason = self.cleaned_data["reason"].strip()
+        if not reason:
+            raise forms.ValidationError("A rejection reason is required.")
+        return reason
