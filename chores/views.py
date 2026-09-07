@@ -128,9 +128,7 @@ def _editor_redirect(request):
 def chore_create(request):
     form = ChoreForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
-        chore = form.save(commit=False)
-        chore.recurrence_rule = None
-        chore.save()
+        form.save()
         return _editor_redirect(request)
     return render(
         request,
@@ -142,7 +140,7 @@ def chore_create(request):
 @require_http_methods(["GET", "POST"])
 @parent_mode_required
 def chore_edit(request, chore_id):
-    chore = get_object_or_404(Chore, pk=chore_id, recurrence_rule__isnull=True)
+    chore = get_object_or_404(Chore, pk=chore_id)
     form = ChoreForm(request.POST or None, instance=chore)
     if request.method == "POST" and form.is_valid():
         form.save()

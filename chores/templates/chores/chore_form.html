@@ -9,6 +9,7 @@
       {% csrf_token %}
       <input type="hidden" name="next" value="{% url 'chores:family_board' %}">
       {{ form.as_p }}
+      <p>For a rotation, enter child ids in order, for example: 2,1.</p>
       <button type="submit">{{ submit_label }}</button>
     </form>
   </main>

@@ -109,5 +109,10 @@ class ChoreEditorTests(TestCase):
                 "reward_amount",
                 "assigned_child",
                 "is_shared",
+                "is_recurring",
+                "recurrence_frequency",
+                "recurrence_interval",
+                "recurrence_weekdays",
+                "rotation_order",
             ],
         )

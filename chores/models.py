@@ -10,7 +10,7 @@ single implicit currency. ``USE_TZ`` is on, so ``DateTimeField`` values are
 timezone-aware.
 """
 
-from django.db import models
+from django.db import models, transaction
 
 from chores import state_machine
 
@@ -190,6 +190,14 @@ class Chore(models.Model):
         related_name="chores",
         help_text="NULL means a one-off chore.",
     )
+    generated_from = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="next_occurrences",
+        help_text="The previous occurrence that generated this recurring chore.",
+    )
     rejection_reason = models.TextField(
         blank=True,
         default="",
@@ -225,7 +233,12 @@ class Chore(models.Model):
                 condition=models.Q(reward_amount__isnull=True)
                 | models.Q(reward_amount__gte=0),
                 name="chore_reward_amount_non_negative",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["generated_from"],
+                condition=models.Q(generated_from__isnull=False),
+                name="chore_one_next_occurrence",
+            ),
         ]
 
     def __str__(self):
@@ -249,7 +262,12 @@ class Chore(models.Model):
 
     def approve(self):
         """Sign it off: ``awaiting_approval`` -> ``approved`` (terminal)."""
-        state_machine.approve(self)
+        with transaction.atomic():
+            state_machine.approve(self)
+            if self.recurrence_rule_id:
+                from chores.recurrence import advance_recurring_chore
+
+                advance_recurring_chore(self)
 
     def reject(self, reason):
         """Send it back: ``awaiting_approval`` -> ``returned``, with a reason."""
