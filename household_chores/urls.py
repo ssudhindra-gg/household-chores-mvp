@@ -18,6 +18,16 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
+from chores import views
+
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("mode/", views.mode_switch, name="mode_switch"),
+    path("mode/set/", views.set_session_mode, name="set_session_mode"),
+    path("chores/<int:chore_id>/claim/", views.claim_chore, name="claim_chore"),
+    path("chores/<int:chore_id>/complete/", views.complete_chore, name="complete_chore"),
+    path("chores/<int:chore_id>/approve/", views.approve_chore, name="approve_chore"),
+    path("chores/<int:chore_id>/reject/", views.reject_chore, name="reject_chore"),
+    path("payouts/record/", views.record_child_payout, name="record_child_payout"),
+    path("chore-requests/", views.request_chore, name="request_chore"),
 ]
