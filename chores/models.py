@@ -1,9 +1,9 @@
 """Core domain models for the shared household chores MVP.
 
-This module defines *shape only*: fields, relationships, choice sets and the
-database constraints that keep obviously bad rows out. Behaviour -- status
-transitions, balance maths, rotation, payout validation -- lives in later
-tasks and deliberately has no home here.
+This module defines the domain entities and their small, local invariants.
+Cross-row business rules live in the relevant service modules: status
+transitions in ``state_machine``, balance maths in ``balances``, and safe
+payout recording in ``payouts``.
 
 All money is stored as ``DecimalField(max_digits=7, decimal_places=2)`` in a
 single implicit currency. ``USE_TZ`` is on, so ``DateTimeField`` values are
@@ -264,6 +264,24 @@ class Chore(models.Model):
         return state_machine.allowed_actions(self, child)
 
 
+class PayoutQuerySet(models.QuerySet):
+    """A payout history cannot be removed in bulk."""
+
+    def delete(self, *args, **kwargs):
+        from chores.payouts import PayoutImmutableError
+
+        raise PayoutImmutableError("Payouts are append-only and cannot be deleted")
+
+
+class PayoutManager(models.Manager.from_queryset(PayoutQuerySet)):
+    """Manager exposing the validated append-only recording operation."""
+
+    def record(self, child, amount, paid_on):
+        from chores.payouts import record_payout
+
+        return record_payout(child, amount, paid_on)
+
+
 class Payout(models.Model):
     """Cash actually handed over to a child.
 
@@ -275,6 +293,8 @@ class Payout(models.Model):
     amount = models.DecimalField(max_digits=7, decimal_places=2)
     paid_on = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = PayoutManager()
 
     class Meta:
         ordering = ["-paid_on", "-id"]
@@ -289,6 +309,18 @@ class Payout(models.Model):
 
     def __str__(self):
         return f"{self.child.name}: {self.amount}"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            from chores.payouts import PayoutImmutableError
+
+            raise PayoutImmutableError("Payouts are append-only and cannot be edited")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        from chores.payouts import PayoutImmutableError
+
+        raise PayoutImmutableError("Payouts are append-only and cannot be deleted")
 
 
 class ChoreRequest(models.Model):
