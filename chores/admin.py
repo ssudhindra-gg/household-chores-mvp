@@ -8,6 +8,7 @@ from django.template.response import TemplateResponse
 from django.utils import timezone
 
 from .forms import PayoutForm, RejectSelectedForm
+from .limits import weekly_limit_warning
 from .models import Child, Chore, ChoreRequest, Payout, RecurrenceRule
 from .payouts import record_payout
 from .recurrence import RecurrenceError
@@ -44,6 +45,9 @@ class ChoreAdmin(admin.ModelAdmin):
                 failures.append(f"{chore.pk}: {exc}")
             else:
                 approved += 1
+                warning = weekly_limit_warning(chore)
+                if warning:
+                    self.message_user(request, warning, messages.WARNING)
 
         if approved:
             self.message_user(
