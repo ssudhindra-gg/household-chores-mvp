@@ -55,7 +55,7 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce
 
-from chores.models import Child, Chore, Payout
+from chores.models import Child, Chore, ChoreClaim, Payout
 
 ZERO = Decimal("0.00")
 
@@ -124,19 +124,6 @@ def _child_total_subquery(queryset, field, child_field):
     )
 
 
-def _approved_chores(child):
-    """Approved chores assigned to ``child``, with default ordering cleared.
-
-    A chore counts only when it is ``approved`` and only for the child it is
-    assigned to. An approved row with ``assigned_child = NULL`` -- reachable
-    only by hand-editing around ``approve()`` -- matches nobody here and so
-    lands in no balance at all.
-    """
-    return Chore.objects.order_by().filter(
-        assigned_child=child, status=Chore.Status.APPROVED
-    )
-
-
 def total_earned(child):
     """Lifetime rewards approved for ``child``, as a two-place ``Decimal``.
 
@@ -144,8 +131,12 @@ def total_earned(child):
     turning the total into ``None``. One query; ``Decimal("0.00")`` when the
     child has earned nothing.
     """
-    row = _approved_chores(child).aggregate(total=_sum("reward_amount"))
-    return _to_money(row["total"])
+    row = (
+        annotate_balances(Child.objects.filter(pk=child.pk))
+        .values("total_earned")
+        .first()
+    )
+    return _to_money(row["total_earned"] if row else None)
 
 
 def total_paid_out(child):
@@ -193,13 +184,27 @@ def annotate_balances(child_queryset):
     totals ride along as correlated subqueries rather than a follow-up query
     per child.
     """
-    return child_queryset.annotate(
-        total_earned=_child_total_subquery(
-            Chore.objects.filter(status=Chore.Status.APPROVED),
-            "reward_amount",
-            "assigned_child",
+    claim_earned = _child_total_subquery(
+        ChoreClaim.objects.filter(chore__status=Chore.Status.APPROVED),
+        "reward_share",
+        "child",
+    )
+    legacy_earned = _child_total_subquery(
+        Chore.objects.filter(
+            status=Chore.Status.APPROVED,
+            claims__isnull=True,
         ),
+        "reward_amount",
+        "assigned_child",
+    )
+    return child_queryset.annotate(
+        _claim_earned=claim_earned,
+        _legacy_earned=legacy_earned,
         total_paid_out=_child_total_subquery(Payout.objects, "amount", "child"),
+    ).annotate(
+        total_earned=ExpressionWrapper(
+            F("_claim_earned") + F("_legacy_earned"), output_field=MONEY
+        )
     ).annotate(
         unpaid_balance=ExpressionWrapper(
             F("total_earned") - F("total_paid_out"), output_field=MONEY

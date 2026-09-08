@@ -52,8 +52,8 @@ screens.
 
 A single Django project with:
 
-- A `chores` app containing the core models (`Chore`, `Child`, `Payout`, `RecurrenceRule`,
-  `ChoreRequest`) plus the board and kid-facing views.
+- A `chores` app containing the core models (`Chore`, `Child`, `ChoreClaim`, `Payout`,
+  `RecurrenceRule`, `ChoreRequest`) plus the board and kid-facing views.
 - A thin **Parent/Kid mode switch** implemented as a session flag toggled by a UI control — no
   real accounts or authentication, matching the spec's explicit scope.
 - SQLite as the database file. Runs via Django's dev server, or `gunicorn` for steadier
@@ -68,7 +68,12 @@ No code yet — this describes the entities and relationships, not implementatio
 - **`Chore`** — title, optional notes, category, priority (normal/urgent), due date/time, optional
   reward amount (absent = unpaid chore), status (`available` / `claimed` / `awaiting approval` /
   `approved` / `returned`), assigned child (nullable — null means available/shared), shared flag
-  (multiple children may claim), link to a `RecurrenceRule` when recurring.
+  (multiple children may claim), link to a `RecurrenceRule` when recurring. The assigned-child
+  field remains the earliest-claim compatibility pointer.
+- **`ChoreClaim`** — one ordered claim per child and chore, with claim/completion timestamps and
+  the child's cent-exact reward share after approval. Shared chores keep all claim rows until a
+  child gives up the claim; balances sum approved claim shares and fall back to legacy chore
+  rewards for chores without claim rows.
 - **`RecurrenceRule`** — daily / weekly / custom schedule, plus the rotation order among children
   for fairness.
 - **`Payout`** — child, amount, date. Recording a payout reduces the child's unpaid balance while
@@ -100,8 +105,9 @@ available → claimed → awaiting approval → approved
 
 — are enforced in model methods or a small service layer, **not** scattered across views, so
 every entry point (board actions, admin actions) goes through the same rules. Approval is the
-single place where a rewarded chore's cash amount is added to the child's unpaid balance, keeping
-the money math auditable from one code path.
+single place where a rewarded chore's cash amount is allocated to claimant shares, keeping the
+money math auditable from one code path. A shared chore may accept another claim while already
+claimed; completion and release name a claimant when more than one child is present.
 
 ## Error Handling & Validation
 

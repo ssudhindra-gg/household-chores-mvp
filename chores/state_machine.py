@@ -62,14 +62,15 @@ ACTOR_MODES = (PARENT, KID, SYSTEM)
 # ``TRANSITIONS[action][from_status] -> to_status``. Any ``(action, status)``
 # pair absent from this structure is illegal and raises. ``approved`` is
 # terminal: it appears only as a destination, never as a source, so an
-# approved chore has no legal action at all. No self-transition (``X -> X``)
-# is listed either, which is what makes the transitions non-idempotent.
+# approved chore has no legal action at all. ``claim`` is intentionally a
+# self-transition for shared chores: a second child may join an existing
+# shared claim set without changing the chore's status.
 #
 # ``complete`` is deliberately *not* legal from ``returned``: a returned chore
 # is re-claimed first, so a chore only sits in ``claimed`` while somebody is
 # actually on it.
 TRANSITIONS = {
-    CLAIM: {AVAILABLE: CLAIMED, RETURNED: CLAIMED},
+    CLAIM: {AVAILABLE: CLAIMED, CLAIMED: CLAIMED, RETURNED: CLAIMED},
     COMPLETE: {CLAIMED: AWAITING_APPROVAL},
     APPROVE: {AWAITING_APPROVAL: APPROVED},
     REJECT: {AWAITING_APPROVAL: RETURNED},
@@ -144,6 +145,11 @@ def can_claim(chore, child):
     """
     if child is None:
         return False
+    claims = list(chore.claims.all())
+    if claims and child.pk in {claim.child_id for claim in claims}:
+        return chore.status == RETURNED
+    if chore.status == CLAIMED and not chore.is_shared:
+        return False
     if chore.assigned_child_id is None:
         return True
     if chore.is_shared:
@@ -158,12 +164,39 @@ def allowed_actions(chore, child=None):
     to claim this chore; with no child, eligibility is not considered.
     """
     actions = [action for action, moves in TRANSITIONS.items() if chore.status in moves]
-    if child is not None and not can_claim(chore, child):
+    if chore.status == CLAIMED and not chore.is_shared:
         actions = [action for action in actions if action != CLAIM]
+    if child is not None:
+        if not can_claim(chore, child):
+            actions = [action for action in actions if action != CLAIM]
+        if child.pk not in chore.claimant_ids:
+            actions = [
+                action for action in actions if action not in {COMPLETE, RELEASE}
+            ]
     return actions
 
 
 # --- Applying a transition -----------------------------------------------
+
+
+def _resolve_claimant(chore, child, action):
+    claimant_ids = chore.claimant_ids
+    if child is not None:
+        if child.pk not in claimant_ids:
+            raise InvalidChoreTransition(
+                chore, action, f"{child} has not claimed this chore"
+            )
+        return child
+
+    claimants = chore.claimants
+    if len(claimants) > 1:
+        raise InvalidChoreTransition(
+            chore, action, "several children have claimed it; name one"
+        )
+    if claimants:
+        return claimants[0]
+    _require_assigned_child(chore, action)
+    return chore.assigned_child
 
 
 def _fields_to_write(chore, action, child, reason, now):
@@ -190,11 +223,11 @@ def _fields_to_write(chore, action, child, reason, now):
                 f"it is assigned to {chore.assigned_child} and is not shared, "
                 f"so {child} cannot claim it",
             )
-        updates["assigned_child"] = child
+        updates["assigned_child_id"] = child.pk
         updates["claimed_at"] = now
 
     elif action == COMPLETE:
-        _require_assigned_child(chore, action)
+        _resolve_claimant(chore, child, action)
         updates["completed_at"] = now
 
     elif action == APPROVE:
@@ -212,8 +245,7 @@ def _fields_to_write(chore, action, child, reason, now):
         updates["completed_at"] = None
 
     elif action == RELEASE:
-        updates["assigned_child"] = None
-        updates["claimed_at"] = None
+        _resolve_claimant(chore, child, action)
 
     return updates
 
@@ -269,7 +301,6 @@ def apply_transition(chore, action, child=None, reason=None, actor_mode=SYSTEM):
     # to be taken first.
     from_status = chore.status
     updates = _fields_to_write(chore, action, child, reason, now)
-    to_status = TRANSITIONS[action][from_status]
     # Derived, never passed in: whoever the caller named (only ``claim``
     # takes a child), else the child already on the chore when a kid acts.
     acting_child = child if child is not None else (
@@ -277,9 +308,64 @@ def apply_transition(chore, action, child=None, reason=None, actor_mode=SYSTEM):
     )
 
     with transaction.atomic():
+        Claim = chore.claims.model
+        claimant = None
+        assigned_child_cache = None
+        if action == CLAIM:
+            claimant = (
+                Claim.objects.filter(chore=chore, child=child).first()
+            )
+            if claimant is None:
+                Claim.objects.create(chore=chore, child=child, claimed_at=now)
+            else:
+                claimant.claimed_at = now
+                claimant.completed_at = None
+                claimant.save(update_fields=["claimed_at", "completed_at"])
+            primary = Claim.objects.filter(chore=chore).order_by(
+                "claimed_at", "id"
+            ).first()
+            updates["assigned_child_id"] = primary.child_id
+            updates["claimed_at"] = primary.claimed_at
+            assigned_child_cache = (
+                child
+                if Claim.objects.filter(chore=chore).count() == 1
+                else primary.child
+            )
+
+        elif action == COMPLETE:
+            claimant = _resolve_claimant(chore, child, action)
+            claim = Claim.objects.filter(chore=chore, child=claimant).first()
+            if claim is not None:
+                claim.completed_at = now
+                claim.save(update_fields=["completed_at"])
+
+        elif action == REJECT:
+            Claim.objects.filter(chore=chore).update(completed_at=None)
+
+        elif action == RELEASE:
+            claimant = _resolve_claimant(chore, child, action)
+            Claim.objects.filter(chore=chore, child=claimant).delete()
+            primary = Claim.objects.filter(chore=chore).order_by(
+                "claimed_at", "id"
+            ).first()
+            if primary is None:
+                updates["status"] = TRANSITIONS[action][from_status]
+                updates["assigned_child_id"] = None
+                updates["claimed_at"] = None
+            else:
+                updates["status"] = from_status
+                updates["assigned_child_id"] = primary.child_id
+                updates["claimed_at"] = primary.claimed_at
+                assigned_child_cache = primary.child
+
         for field, value in updates.items():
             setattr(chore, field, value)
+        if "assigned_child_id" in updates:
+            chore._state.fields_cache.pop("assigned_child", None)
+            if assigned_child_cache is not None:
+                chore.assigned_child = assigned_child_cache
         chore.save(update_fields=[*updates, "updated_at"])
+        to_status = updates["status"]
         # Table-driven: nothing below names an action, so a sixth row in
         # ``TRANSITIONS`` is recorded without touching this code.
         activity.record_event(
@@ -299,9 +385,9 @@ def claim(chore, child, actor_mode=SYSTEM):
     apply_transition(chore, CLAIM, child=child, actor_mode=actor_mode)
 
 
-def complete(chore, actor_mode=SYSTEM):
+def complete(chore, child=None, actor_mode=SYSTEM):
     """``claimed`` -> ``awaiting_approval``."""
-    apply_transition(chore, COMPLETE, actor_mode=actor_mode)
+    apply_transition(chore, COMPLETE, child=child, actor_mode=actor_mode)
 
 
 def approve(chore, actor_mode=SYSTEM):
@@ -314,6 +400,6 @@ def reject(chore, reason, actor_mode=SYSTEM):
     apply_transition(chore, REJECT, reason=reason, actor_mode=actor_mode)
 
 
-def release(chore, actor_mode=SYSTEM):
+def release(chore, child=None, actor_mode=SYSTEM):
     """``claimed``/``returned`` -> ``available``, giving the chore back."""
-    apply_transition(chore, RELEASE, actor_mode=actor_mode)
+    apply_transition(chore, RELEASE, child=child, actor_mode=actor_mode)

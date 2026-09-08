@@ -245,6 +245,24 @@ class Chore(models.Model):
         # Uses only local columns, so it never triggers an extra query.
         return f"{self.title} ({self.status})"
 
+    @property
+    def claimants(self):
+        """Children holding claims, with the legacy assigned-child fallback."""
+        claims = list(self.claims.all())
+        if claims:
+            return [claim.child for claim in claims]
+        if self.assigned_child_id:
+            return [self.assigned_child]
+        return []
+
+    @property
+    def claimant_ids(self):
+        """Claimant primary keys, preserving claim order and legacy fallback."""
+        claims = list(self.claims.all())
+        if claims:
+            return [claim.child_id for claim in claims]
+        return [self.assigned_child_id] if self.assigned_child_id else []
+
     # -- Status transitions ------------------------------------------------
     #
     # Thin delegations only. Which transitions are legal, what each one
@@ -253,17 +271,20 @@ class Chore(models.Model):
     # caller ever needs ``save()``, and each returns ``None``.
 
     def claim(self, child, actor_mode=state_machine.SYSTEM):
-        """Take this chore on: ``available``/``returned`` -> ``claimed``."""
+        """Take this chore on, adding a claim to a shared claim set."""
         state_machine.claim(self, child, actor_mode=actor_mode)
 
-    def complete(self, actor_mode=state_machine.SYSTEM):
+    def complete(self, child=None, actor_mode=state_machine.SYSTEM):
         """Hand it in: ``claimed`` -> ``awaiting_approval``."""
-        state_machine.complete(self, actor_mode=actor_mode)
+        state_machine.complete(self, child=child, actor_mode=actor_mode)
 
     def approve(self, actor_mode=state_machine.SYSTEM):
         """Sign it off: ``awaiting_approval`` -> ``approved`` (terminal)."""
         with transaction.atomic():
             state_machine.approve(self, actor_mode=actor_mode)
+            from chores.rewards import allocate_reward_shares
+
+            allocate_reward_shares(self)
             if self.recurrence_rule_id:
                 from chores.recurrence import advance_recurring_chore
 
@@ -273,13 +294,45 @@ class Chore(models.Model):
         """Send it back: ``awaiting_approval`` -> ``returned``, with a reason."""
         state_machine.reject(self, reason, actor_mode=actor_mode)
 
-    def release(self, actor_mode=state_machine.SYSTEM):
+    def release(self, child=None, actor_mode=state_machine.SYSTEM):
         """Give it back: ``claimed``/``returned`` -> ``available``."""
-        state_machine.release(self, actor_mode=actor_mode)
+        state_machine.release(self, child=child, actor_mode=actor_mode)
 
     def allowed_actions(self, child=None):
         """Action names legal right now, for deciding which buttons to show."""
         return state_machine.allowed_actions(self, child)
+
+
+class ChoreClaim(models.Model):
+    """One child's claim on one chore, including the eventual reward share."""
+
+    chore = models.ForeignKey(Chore, on_delete=models.CASCADE, related_name="claims")
+    child = models.ForeignKey(Child, on_delete=models.PROTECT, related_name="claims")
+    claimed_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    reward_share = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["claimed_at", "id"]
+        indexes = [models.Index(fields=["child"], name="claim_child_idx")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["chore", "child"], name="chore_claim_unique_child"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reward_share__isnull=True)
+                | models.Q(reward_share__gte=0),
+                name="chore_claim_reward_non_negative",
+            ),
+        ]
+
+    def __str__(self):
+        return f"claim {self.chore_id}/{self.child_id}"
 
 
 class PayoutImmutable(Exception):

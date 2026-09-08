@@ -10,19 +10,22 @@
   <td>{{ chore.get_category_display }}</td>
   <td>{{ chore.get_priority_display }}</td>
   <td>{{ chore.get_status_display }}</td>
-  <td>{% if chore.assigned_child %}{{ chore.assigned_child.name }}{% else %}Unassigned/shared{% endif %}</td>
+  <td>
+    {% for claimant in chore.claimants %}
+      {% if not forloop.first %}, {% endif %}{{ claimant.name }}
+    {% empty %}Unassigned/shared{% endfor %}
+  </td>
   <td>{% if chore.reward_amount is not None %}{{ chore.reward_amount }}{% else %}Unpaid{% endif %}</td>
   <td>
     {% if is_kid_mode and current_child %}
-      {% if chore.status == "available" or chore.status == "returned" %}
-        {% if not chore.assigned_child or chore.is_shared or chore.assigned_child_id == current_child.pk %}
-          <form method="post" action="{% url 'chores:claim_chore' chore.pk %}" hx-post="{% url 'chores:claim_chore' chore.pk %}" hx-target="#chore-{{ chore.pk }}" hx-swap="outerHTML">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-            <button type="submit">Claim</button>
-          </form>
-        {% endif %}
-      {% elif chore.status == "claimed" and chore.assigned_child_id == current_child.pk %}
+      {% if "claim" in chore.kid_actions %}
+        <form method="post" action="{% url 'chores:claim_chore' chore.pk %}" hx-post="{% url 'chores:claim_chore' chore.pk %}" hx-target="#chore-{{ chore.pk }}" hx-swap="outerHTML">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit">Claim</button>
+        </form>
+      {% endif %}
+      {% if "complete" in chore.kid_actions %}
         <form method="post" action="{% url 'chores:complete_chore' chore.pk %}" hx-post="{% url 'chores:complete_chore' chore.pk %}" hx-target="#chore-{{ chore.pk }}" hx-swap="outerHTML">
           {% csrf_token %}
           <input type="hidden" name="next" value="{{ request.get_full_path }}">
