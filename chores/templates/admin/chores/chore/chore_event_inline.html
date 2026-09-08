@@ -1,0 +1,48 @@
+{% comment %}
+Read-only activity panel for a chore's change page.
+
+Rows are rendered straight from the formset's queryset rather than from
+inline forms: there is nothing to edit, so there is no reason to build inputs
+for it. The management form is still rendered so that saving the chore does
+not trip Django's missing-management-form check.
+{% endcomment %}
+<div class="js-inline-admin-formset inline-group" id="{{ inline_admin_formset.formset.prefix }}-group">
+  <div class="tabular inline-related">
+    {{ inline_admin_formset.formset.management_form }}
+    <fieldset class="module {{ inline_admin_formset.classes }}">
+      <h2 class="inline-heading">{{ inline_admin_formset.opts.verbose_name_plural|capfirst }}</h2>
+      {% with events=inline_admin_formset.formset.get_queryset %}
+        {% if events %}
+          <div class="wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">When</th>
+                  <th scope="col">Action</th>
+                  <th scope="col">Status change</th>
+                  <th scope="col">Actor mode</th>
+                  <th scope="col">Acting child</th>
+                  <th scope="col">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for event in events %}
+                  <tr class="form-row">
+                    <td>{{ event.occurred_at }}</td>
+                    <td>{{ event.action }}</td>
+                    <td>{{ event.from_status }} &rarr; {{ event.to_status }}</td>
+                    <td>{{ event.actor_mode }}</td>
+                    <td>{{ event.acting_child|default_if_none:"" }}</td>
+                    <td>{{ event.reason }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="help">{{ inline_admin_formset.formset.activity_empty_message }}</p>
+        {% endif %}
+      {% endwith %}
+    </fieldset>
+  </div>
+</div>

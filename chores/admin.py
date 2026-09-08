@@ -9,13 +9,93 @@ from django.utils import timezone
 
 from .forms import PayoutForm, RejectSelectedForm
 from .limits import weekly_limit_warning
-from .models import Child, Chore, ChoreRequest, Payout, RecurrenceRule
+from .models import Child, Chore, ChoreEvent, ChoreRequest, Payout, RecurrenceRule
 from .payouts import record_payout
 from .recurrence import RecurrenceError
 from .request_flow import RequestDecisionError, accept_request, decline_request
 from .state_machine import PARENT, InvalidChoreTransition
 
 admin.site.register(Child)
+
+
+
+# The two things an empty activity panel can mean. A chore created after the
+# activity log shipped and never touched has genuinely had nothing happen to
+# it; a chore created before it may have a whole history that was simply
+# never recorded, and saying "nothing happened" about that one would be a
+# lie. The milestone timestamps and the rejection reason are the only
+# evidence left of the second case.
+#
+# Accepted imprecision: a pre-migration chore that was claimed and then
+# released has ``claimed_at`` back at NULL and no rejection reason, so it is
+# indistinguishable from an untouched one and shows the first message. Every
+# other pre-migration chore that was worked on shows the second.
+NO_ACTIVITY_YET = "Nothing has happened to this chore yet."
+ACTIVITY_PREDATES_LOG = (
+    "No activity was recorded for this chore — it predates the activity log."
+)
+
+
+def activity_empty_message(chore):
+    """Which empty-panel message ``chore`` should show."""
+    if chore is None:
+        return NO_ACTIVITY_YET
+    worked_on = (
+        chore.claimed_at is not None
+        or chore.completed_at is not None
+        or chore.approved_at is not None
+        or bool(chore.rejection_reason)
+    )
+    return ACTIVITY_PREDATES_LOG if worked_on else NO_ACTIVITY_YET
+
+
+class ChoreEventInline(admin.TabularInline):
+    """The chore's own activity history: read-only, newest first.
+
+    Deliberately an inline on the chore rather than a top-level admin model:
+    a browsable cross-chore feed is a separate task. Every permission hook
+    says no, so a parent can read this panel and nothing else.
+    """
+
+    model = ChoreEvent
+    template = "admin/chores/chore/chore_event_inline.html"
+    verbose_name = "activity entry"
+    verbose_name_plural = "Activity"
+    extra = 0
+    max_num = 0
+    can_delete = False
+    fields = (
+        "occurred_at",
+        "action",
+        "status_change",
+        "actor_mode",
+        "acting_child",
+        "reason",
+    )
+    readonly_fields = fields
+
+    @admin.display(description="Status change")
+    def status_change(self, obj):
+        return f"{obj.from_status} → {obj.to_status}"
+
+    def get_queryset(self, request):
+        # ``acting_child`` is rendered on every row, so join it once here
+        # rather than paying one query per event.
+        return super().get_queryset(request).select_related("acting_child")
+
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(request, obj, **kwargs)
+        formset.activity_empty_message = activity_empty_message(obj)
+        return formset
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Chore)
@@ -33,6 +113,14 @@ class ChoreAdmin(admin.ModelAdmin):
     search_fields = ("title", "notes", "assigned_child__name")
     list_per_page = 25
     actions = ("approve_selected", "reject_selected")
+    inlines = (ChoreEventInline,)
+
+    def get_inline_instances(self, request, obj=None):
+        # A chore that does not exist yet has no history, and the add page
+        # has nothing to hang one off. The panel belongs to the change page.
+        if obj is None:
+            return []
+        return super().get_inline_instances(request, obj)
 
     @admin.action(description="Approve selected chores")
     def approve_selected(self, request, queryset):
