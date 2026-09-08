@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.cache import patch_vary_headers
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -26,6 +27,7 @@ from .models import (
     ChoreStatus,
 )
 from .payouts import record_payout
+from .reminders import reminder_state
 from .state_machine import InvalidChoreTransition
 
 
@@ -91,6 +93,11 @@ def family_board(request):
     priority_filter = request.GET.get("priority", "")
     if priority_filter in {value for value, _label in ChorePriority.choices}:
         chores = chores.filter(priority=priority_filter)
+
+    render_now = timezone.now()
+    chores = list(chores)
+    for chore in chores:
+        chore.reminder_state = reminder_state(chore, render_now)
 
     response = render(
         request,

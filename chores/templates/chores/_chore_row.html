@@ -1,5 +1,12 @@
 <tr id="chore-{{ chore.pk }}">
-  <td>{{ chore.title }}</td>
+  <td>
+    {{ chore.title }}
+    {% if chore.reminder_state == "upcoming" %}
+      <span class="reminder reminder-upcoming">Upcoming reminder</span>
+    {% elif chore.reminder_state == "overdue" %}
+      <span class="reminder reminder-overdue">Overdue reminder</span>
+    {% endif %}
+  </td>
   <td>{{ chore.get_category_display }}</td>
   <td>{{ chore.get_priority_display }}</td>
   <td>{{ chore.get_status_display }}</td>
