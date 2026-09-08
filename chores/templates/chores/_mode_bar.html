@@ -19,6 +19,7 @@
     <a href="{% url 'admin:index' %}">Admin</a>
     <a href="{% url 'chores:weekly_summary' %}">Weekly summary</a>
   {% else %}
+    <a href="{% url 'chores:kid_dashboard' %}">My dashboard</a>
     <a href="{% url 'chores:request_chore' %}">Request a chore</a>
   {% endif %}
 </header>

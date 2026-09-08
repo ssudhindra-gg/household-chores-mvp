@@ -1,0 +1,51 @@
+{% extends "chores/base.html" %}
+
+{% block title %}Kid dashboard | Household Chores{% endblock %}
+
+{% block content %}
+  <main>
+    <h1>{{ current_child.name }}'s dashboard</h1>
+
+    <section>
+      <h2>Current balance</h2>
+      <p>{{ balance }}</p>
+    </section>
+
+    <section>
+      <h2>Assigned chores</h2>
+      {% if assigned_chores %}
+        <ul>{% for chore in assigned_chores %}<li>{{ chore.title }} — {{ chore.get_status_display }}</li>{% endfor %}</ul>
+      {% else %}<p>No active assigned chores.</p>{% endif %}
+    </section>
+
+    <section>
+      <h2>Available to claim</h2>
+      {% if available_chores %}
+        <ul>{% for chore in available_chores %}<li>{{ chore.title }} — {{ chore.get_category_display }}</li>{% endfor %}</ul>
+      {% else %}<p>No chores available to claim.</p>{% endif %}
+    </section>
+
+    <section>
+      <h2>Pending requests</h2>
+      {% if pending_requests %}
+        <ul>{% for request in pending_requests %}<li>{{ request.title }}</li>{% endfor %}</ul>
+      {% else %}<p>No pending requests.</p>{% endif %}
+    </section>
+
+    <section>
+      <h2>Completion history</h2>
+      {% if completion_history %}
+        <ul>{% for chore in completion_history %}<li>{{ chore.title }} — {{ chore.approved_at|date:"M j, Y" }}</li>{% endfor %}</ul>
+      {% else %}<p>No completed chores yet.</p>{% endif %}
+    </section>
+
+    <section>
+      <h2>Payout history</h2>
+      {% if payout_history %}
+        <ul>{% for payout in payout_history %}<li>{{ payout.paid_on }} — {{ payout.amount }}</li>{% endfor %}</ul>
+      {% else %}<p>No payouts yet.</p>{% endif %}
+    </section>
+
+    <p><a href="{% url 'chores:family_board' %}">Open shared chore board</a></p>
+  </main>
+{% endblock %}

@@ -1,7 +1,8 @@
 from datetime import date
 
-from django.core.exceptions import ValidationError
 from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -26,7 +27,9 @@ from .models import (
     ChorePriority,
     ChoreRequest,
     ChoreStatus,
+    Payout,
 )
+from .balances import unpaid_balance
 from .payouts import record_payout
 from .reminders import reminder_state
 from .state_machine import InvalidChoreTransition
@@ -133,6 +136,45 @@ def weekly_summary(request):
             "summary": weekly_family_summary(),
             "week_start": start,
             "week_end": end,
+        },
+    )
+
+
+@require_GET
+@kid_mode_required
+def kid_dashboard(request):
+    child = request.acting_child
+    assigned_chores = (
+        Chore.objects.filter(assigned_child=child)
+        .exclude(status=Chore.Status.APPROVED)
+        .select_related("assigned_child")
+    )
+    available_chores = (
+        Chore.objects.filter(
+            status__in=(Chore.Status.AVAILABLE, Chore.Status.RETURNED)
+        )
+        .filter(
+            Q(assigned_child__isnull=True)
+            | Q(assigned_child=child)
+            | Q(is_shared=True)
+        )
+        .select_related("assigned_child")
+        .distinct()
+    )
+    return render(
+        request,
+        "chores/kid_dashboard.html",
+        {
+            "assigned_chores": assigned_chores,
+            "available_chores": available_chores,
+            "balance": unpaid_balance(child),
+            "pending_requests": child.chore_requests.filter(
+                status=ChoreRequest.Status.PENDING
+            ),
+            "completion_history": Chore.objects.filter(
+                assigned_child=child, status=Chore.Status.APPROVED
+            ).order_by("-approved_at", "-pk"),
+            "payout_history": Payout.objects.filter(child=child),
         },
     )
 
