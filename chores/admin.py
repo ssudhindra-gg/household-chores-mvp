@@ -12,10 +12,10 @@ from .limits import weekly_limit_warning
 from .models import Child, Chore, ChoreRequest, Payout, RecurrenceRule
 from .payouts import record_payout
 from .recurrence import RecurrenceError
+from .request_flow import RequestDecisionError, accept_request, decline_request
 from .state_machine import InvalidChoreTransition
 
 admin.site.register(Child)
-admin.site.register(ChoreRequest)
 
 
 @admin.register(Chore)
@@ -105,6 +105,47 @@ class ChoreAdmin(admin.ModelAdmin):
                 "Could not reject: " + "; ".join(failures),
                 messages.ERROR,
             )
+
+
+@admin.register(ChoreRequest)
+class ChoreRequestAdmin(admin.ModelAdmin):
+    list_display = ("title", "requested_by", "status", "created_at", "resulting_chore")
+    list_filter = ("status", "requested_by")
+    search_fields = ("title", "notes", "requested_by__name")
+    list_per_page = 25
+    actions = ("accept_selected", "decline_selected")
+
+    @admin.action(description="Accept selected requests")
+    def accept_selected(self, request, queryset):
+        accepted = 0
+        failures = []
+        for chore_request in queryset:
+            try:
+                accept_request(chore_request)
+            except RequestDecisionError as exc:
+                failures.append(str(exc))
+            else:
+                accepted += 1
+        if accepted:
+            self.message_user(request, f"Accepted {accepted} request(s).", messages.SUCCESS)
+        if failures:
+            self.message_user(request, "Could not accept: " + "; ".join(failures), messages.ERROR)
+
+    @admin.action(description="Decline selected requests")
+    def decline_selected(self, request, queryset):
+        declined = 0
+        failures = []
+        for chore_request in queryset:
+            try:
+                decline_request(chore_request)
+            except RequestDecisionError as exc:
+                failures.append(str(exc))
+            else:
+                declined += 1
+        if declined:
+            self.message_user(request, f"Declined {declined} request(s).", messages.SUCCESS)
+        if failures:
+            self.message_user(request, "Could not decline: " + "; ".join(failures), messages.ERROR)
 
 
 @admin.register(Payout)

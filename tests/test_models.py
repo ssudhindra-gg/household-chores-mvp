@@ -457,6 +457,13 @@ class AdminRegistrationTests(TestCase):
                     self.assertIn("approve_selected", model_admin.actions)
                     self.assertIn("reject_selected", model_admin.actions)
                     continue
+                if model is ChoreRequest:
+                    self.assertEqual(
+                        tuple(model_admin.list_filter), ("status", "requested_by")
+                    )
+                    self.assertIn("accept_selected", model_admin.actions)
+                    self.assertIn("decline_selected", model_admin.actions)
+                    continue
                 self.assertEqual(tuple(model_admin.list_filter), ())
                 self.assertEqual(tuple(model_admin.search_fields), ())
                 self.assertEqual(tuple(model_admin.actions or ()), ())

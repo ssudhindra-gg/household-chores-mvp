@@ -1,0 +1,15 @@
+{% extends "chores/base.html" %}
+
+{% block title %}Request a chore | Household Chores{% endblock %}
+
+{% block content %}
+  <main>
+    <h1>Request a chore</h1>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{% url 'chores:family_board' %}">
+      {{ form.as_p }}
+      <button type="submit">Submit request</button>
+    </form>
+  </main>
+{% endblock %}

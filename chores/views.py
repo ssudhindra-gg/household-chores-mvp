@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.core.exceptions import ValidationError
+from django.contrib import messages
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,7 +16,7 @@ from .modes import (
     parent_mode_required,
     set_mode,
 )
-from .forms import ChoreForm
+from .forms import ChoreForm, ChoreRequestForm
 from .models import (
     Child,
     Chore,
@@ -233,18 +234,16 @@ def record_child_payout(request):
     return redirect(_next_url(request))
 
 
-@require_POST
+@require_http_methods(["GET", "POST"])
 @kid_mode_required
 def request_chore(request):
-    child = get_object_or_404(Child, pk=request.POST.get("child_id"))
-    title = request.POST.get("title", "").strip()
-    if not title:
-        return _bad_domain_request("title is required")
-    ChoreRequest.objects.create(
-        requested_by=child,
-        title=title,
-        notes=request.POST.get("notes", ""),
-    )
-    return redirect(_next_url(request))
+    form = ChoreRequestForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        chore_request = form.save(commit=False)
+        chore_request.requested_by = request.acting_child
+        chore_request.save()
+        messages.success(request, "Your chore request was submitted.")
+        return redirect(_next_url(request))
+    return render(request, "chores/chore_request_form.html", {"form": form})
 
 # Create your views here.

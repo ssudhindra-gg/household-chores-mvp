@@ -4,7 +4,14 @@ from django import forms
 from django.db import transaction
 from django.utils import timezone
 
-from chores.models import Child, Chore, Payout, RecurrenceRule, RotationSlot
+from chores.models import (
+    Child,
+    Chore,
+    ChoreRequest,
+    Payout,
+    RecurrenceRule,
+    RotationSlot,
+)
 from chores.payouts import PayoutValidationError, record_payout, validate_payout
 
 
@@ -265,3 +272,9 @@ class RejectSelectedForm(forms.Form):
         if not reason:
             raise forms.ValidationError("A rejection reason is required.")
         return reason
+
+
+class ChoreRequestForm(forms.ModelForm):
+    class Meta:
+        model = ChoreRequest
+        fields = ["title", "notes"]
