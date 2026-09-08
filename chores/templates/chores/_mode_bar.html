@@ -1,25 +1,31 @@
-<header id="mode-bar">
-  {% if is_parent_mode %}
-    <p>Current mode: <strong>Parent Mode</strong></p>
-  {% else %}
-    <p>Current mode: <strong>Kid Mode</strong>{% if current_child %} — {{ current_child.name }}{% endif %}</p>
-  {% endif %}
-  <form method="post" action="{% url 'chores:mode_select' %}">
-    {% csrf_token %}
-    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-    {% if is_kid_mode %}
-      <button type="submit" name="mode" value="parent">Parent Mode</button>
+<header id="mode-bar" class="site-nav">
+  <a class="brand" href="{% url 'chores:family_board' %}">
+    <span class="brand-mark" aria-hidden="true">✓</span>
+    <span><span class="brand-name">Household Chores</span><span class="brand-subtitle">Small wins, shared well</span></span>
+  </a>
+  <nav class="nav-links" aria-label="Primary navigation">
+    {% if is_parent_mode %}
+      <span class="mode-chip">Parent Mode</span>
     {% else %}
-      <button type="submit" name="mode" value="parent">Stay in Parent Mode</button>
+      <span class="mode-chip">Kid Mode{% if current_child %} · {{ current_child.name }}{% endif %}</span>
     {% endif %}
-  </form>
-  <a href="{% url 'chores:mode_select' %}">Choose a mode</a>
-  {% if is_parent_mode %}
-    {# Presentation only: Admin has its own staff login and mode does not protect it. #}
-    <a href="{% url 'admin:index' %}">Admin</a>
-    <a href="{% url 'chores:weekly_summary' %}">Weekly summary</a>
-  {% else %}
-    <a href="{% url 'chores:kid_dashboard' %}">My dashboard</a>
-    <a href="{% url 'chores:request_chore' %}">Request a chore</a>
-  {% endif %}
+    <form method="post" action="{% url 'chores:mode_select' %}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      {% if is_kid_mode %}
+        <button type="submit" name="mode" value="parent">Parent Mode</button>
+      {% else %}
+        <button type="submit" name="mode" value="parent">Stay in Parent Mode</button>
+      {% endif %}
+    </form>
+    <a href="{% url 'chores:mode_select' %}">Choose a mode</a>
+    {% if is_parent_mode %}
+      {# Presentation only: Admin has its own staff login and mode does not protect it. #}
+      <a href="{% url 'admin:index' %}">Admin</a>
+      <a href="{% url 'chores:weekly_summary' %}">Weekly summary</a>
+    {% else %}
+      <a href="{% url 'chores:kid_dashboard' %}">My dashboard</a>
+      <a href="{% url 'chores:request_chore' %}">Request a chore</a>
+    {% endif %}
+  </nav>
 </header>

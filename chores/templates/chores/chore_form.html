@@ -3,9 +3,9 @@
 {% block title %}{{ heading }} | Household Chores{% endblock %}
 
 {% block content %}
-  <main>
-    <h1>{{ heading }}</h1>
-    <form method="post">
+  <main class="page-shell">
+    <section class="page-heading"><div><p class="eyebrow">Parent workspace</p><h1>{{ heading }}</h1><p class="lede">Shape the work clearly so everyone knows what good looks like.</p></div></section>
+    <form class="panel form-panel" method="post">
       {% csrf_token %}
       <input type="hidden" name="next" value="{% url 'chores:family_board' %}">
       {{ form.as_p }}

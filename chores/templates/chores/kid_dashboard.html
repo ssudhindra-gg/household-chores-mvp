@@ -3,49 +3,59 @@
 {% block title %}Kid dashboard | Household Chores{% endblock %}
 
 {% block content %}
-  <main>
-    <h1>{{ current_child.name }}'s dashboard</h1>
-
-    <section>
-      <h2>Current balance</h2>
-      <p>{{ balance }}</p>
+  <main class="page-shell">
+    <section class="page-heading">
+      <div>
+        <p class="eyebrow">Your corner of the household</p>
+        <h1>{{ current_child.name }}'s dashboard</h1>
+        <p class="lede">A quick look at what is waiting, what is yours, and what you have earned.</p>
+      </div>
+      <a class="button" href="{% url 'chores:request_chore' %}">+ Request a chore</a>
     </section>
 
-    <section>
+    <section class="stats-grid">
+      <div class="stat-card"><span class="stat-label">Current balance</span><div class="stat-value">${{ balance }}</div></div>
+      <div class="stat-card"><span class="stat-label">Assigned</span><div class="stat-value">{{ assigned_chores|length }}</div></div>
+      <div class="stat-card"><span class="stat-label">Available</span><div class="stat-value">{{ available_chores|length }}</div></div>
+    </section>
+
+    <div class="dashboard-grid">
+    <section class="list-card">
       <h2>Assigned chores</h2>
       {% if assigned_chores %}
-        <ul>{% for chore in assigned_chores %}<li>{{ chore.title }} — {{ chore.get_status_display }}{% if chore.claimants %} — {% for claimant in chore.claimants %}{% if not forloop.first %}, {% endif %}{{ claimant.name }}{% endfor %}{% endif %}</li>{% endfor %}</ul>
-      {% else %}<p>No active assigned chores.</p>{% endif %}
+        <ul class="clean-list">{% for chore in assigned_chores %}<li><span><strong>{{ chore.title }}</strong><br><small>{{ chore.get_status_display }}</small></span><span class="status-pill status-{{ chore.status }}">{{ chore.get_status_display }}</span></li>{% endfor %}</ul>
+      {% else %}<p class="empty-state">No active assigned chores.</p>{% endif %}
     </section>
 
-    <section>
+    <section class="list-card">
       <h2>Available to claim</h2>
       {% if available_chores %}
-        <ul>{% for chore in available_chores %}<li>{{ chore.title }} — {{ chore.get_category_display }}{% if chore.is_shared %} — shared{% endif %}</li>{% endfor %}</ul>
-      {% else %}<p>No chores available to claim.</p>{% endif %}
+        <ul class="clean-list">{% for chore in available_chores %}<li><span><strong>{{ chore.title }}</strong><br><small>{{ chore.get_category_display }}</small></span>{% if chore.is_shared %}<span class="shared-pill status-claimed">Shared</span>{% endif %}</li>{% endfor %}</ul>
+      {% else %}<p class="empty-state">No chores available to claim.</p>{% endif %}
     </section>
 
-    <section>
+    <section class="list-card">
       <h2>Pending requests</h2>
       {% if pending_requests %}
-        <ul>{% for request in pending_requests %}<li>{{ request.title }}</li>{% endfor %}</ul>
-      {% else %}<p>No pending requests.</p>{% endif %}
+        <ul class="clean-list">{% for request in pending_requests %}<li><strong>{{ request.title }}</strong><span class="status-pill status-awaiting_approval">Pending</span></li>{% endfor %}</ul>
+      {% else %}<p class="empty-state">No pending requests.</p>{% endif %}
     </section>
 
-    <section>
+    <section class="list-card">
       <h2>Completion history</h2>
       {% if completion_history %}
-        <ul>{% for chore in completion_history %}<li>{{ chore.title }} — {{ chore.approved_at|date:"M j, Y" }}</li>{% endfor %}</ul>
-      {% else %}<p>No completed chores yet.</p>{% endif %}
+        <ul class="clean-list">{% for chore in completion_history %}<li><strong>{{ chore.title }}</strong><small>{{ chore.approved_at|date:"M j, Y" }}</small></li>{% endfor %}</ul>
+      {% else %}<p class="empty-state">No completed chores yet.</p>{% endif %}
     </section>
 
-    <section>
+    <section class="list-card wide">
       <h2>Payout history</h2>
       {% if payout_history %}
-        <ul>{% for payout in payout_history %}<li>{{ payout.paid_on }} — {{ payout.amount }}</li>{% endfor %}</ul>
-      {% else %}<p>No payouts yet.</p>{% endif %}
+        <ul class="clean-list">{% for payout in payout_history %}<li><strong>{{ payout.paid_on }}</strong><span class="reward">${{ payout.amount }}</span></li>{% endfor %}</ul>
+      {% else %}<p class="empty-state">No payouts yet.</p>{% endif %}
     </section>
+    </div>
 
-    <p><a href="{% url 'chores:family_board' %}">Open shared chore board</a></p>
+    <p class="hero-actions"><a class="button-secondary" href="{% url 'chores:family_board' %}">Open shared chore board</a></p>
   </main>
 {% endblock %}
