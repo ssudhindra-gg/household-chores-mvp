@@ -78,7 +78,9 @@ set_session_mode = mode_select
 
 @require_GET
 def family_board(request):
-    chores = Chore.objects.select_related("assigned_child").all()
+    chores = Chore.objects.select_related("assigned_child").prefetch_related(
+        "claims__child"
+    ).all()
 
     child_filter = request.GET.get("child", "")
     if child_filter:
@@ -101,8 +103,12 @@ def family_board(request):
 
     render_now = timezone.now()
     chores = list(chores)
+    acting_child = current_child(request)
     for chore in chores:
         chore.reminder_state = reminder_state(chore, render_now)
+        chore.kid_actions = (
+            chore.allowed_actions(acting_child) if acting_child is not None else []
+        )
 
     response = render(
         request,
@@ -145,20 +151,23 @@ def weekly_summary(request):
 def kid_dashboard(request):
     child = request.acting_child
     assigned_chores = (
-        Chore.objects.filter(assigned_child=child)
+        Chore.objects.filter(Q(assigned_child=child) | Q(claims__child=child))
         .exclude(status=Chore.Status.APPROVED)
         .select_related("assigned_child")
+        .prefetch_related("claims__child")
+        .distinct()
     )
     available_chores = (
         Chore.objects.filter(
-            status__in=(Chore.Status.AVAILABLE, Chore.Status.RETURNED)
+            Q(status__in=(Chore.Status.AVAILABLE, Chore.Status.RETURNED))
+            | Q(status=Chore.Status.CLAIMED, is_shared=True)
         )
         .filter(
-            Q(assigned_child__isnull=True)
-            | Q(assigned_child=child)
-            | Q(is_shared=True)
+            Q(assigned_child__isnull=True) | Q(is_shared=True)
         )
+        .exclude(Q(assigned_child=child) | Q(claims__child=child))
         .select_related("assigned_child")
+        .prefetch_related("claims__child")
         .distinct()
     )
     return render(
@@ -172,8 +181,13 @@ def kid_dashboard(request):
                 status=ChoreRequest.Status.PENDING
             ),
             "completion_history": Chore.objects.filter(
-                assigned_child=child, status=Chore.Status.APPROVED
-            ).order_by("-approved_at", "-pk"),
+                status=Chore.Status.APPROVED
+            )
+            .filter(Q(assigned_child=child) | Q(claims__child=child))
+            .select_related("assigned_child")
+            .prefetch_related("claims__child")
+            .distinct()
+            .order_by("-approved_at", "-pk"),
             "payout_history": Payout.objects.filter(child=child),
         },
     )
@@ -234,6 +248,16 @@ def _action_error(request, message):
 
 def _action_success(request, chore):
     if request.htmx:
+        chore = (
+            Chore.objects.select_related("assigned_child")
+            .prefetch_related("claims__child")
+            .get(pk=chore.pk)
+        )
+        chore.reminder_state = reminder_state(chore)
+        acting_child = getattr(request, "acting_child", None)
+        chore.kid_actions = (
+            chore.allowed_actions(acting_child) if acting_child is not None else []
+        )
         return render(request, "chores/_chore_row.html", {"chore": chore})
     return redirect(_next_url(request))
 
@@ -255,7 +279,7 @@ def claim_chore(request, chore_id):
 def complete_chore(request, chore_id):
     chore = get_object_or_404(Chore, pk=chore_id)
     try:
-        chore.complete(actor_mode=KID)
+        chore.complete(child=request.acting_child, actor_mode=KID)
     except (InvalidChoreTransition, ValidationError) as exc:
         return _action_error(request, str(exc))
     return _action_success(request, chore)

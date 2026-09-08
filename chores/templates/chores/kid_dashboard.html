@@ -14,14 +14,14 @@
     <section>
       <h2>Assigned chores</h2>
       {% if assigned_chores %}
-        <ul>{% for chore in assigned_chores %}<li>{{ chore.title }} — {{ chore.get_status_display }}</li>{% endfor %}</ul>
+        <ul>{% for chore in assigned_chores %}<li>{{ chore.title }} — {{ chore.get_status_display }}{% if chore.claimants %} — {% for claimant in chore.claimants %}{% if not forloop.first %}, {% endif %}{{ claimant.name }}{% endfor %}{% endif %}</li>{% endfor %}</ul>
       {% else %}<p>No active assigned chores.</p>{% endif %}
     </section>
 
     <section>
       <h2>Available to claim</h2>
       {% if available_chores %}
-        <ul>{% for chore in available_chores %}<li>{{ chore.title }} — {{ chore.get_category_display }}</li>{% endfor %}</ul>
+        <ul>{% for chore in available_chores %}<li>{{ chore.title }} — {{ chore.get_category_display }}{% if chore.is_shared %} — shared{% endif %}</li>{% endfor %}</ul>
       {% else %}<p>No chores available to claim.</p>{% endif %}
     </section>
 

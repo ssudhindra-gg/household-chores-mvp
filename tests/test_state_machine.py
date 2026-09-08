@@ -92,7 +92,7 @@ class TransitionTableTests(SimpleTestCase):
             state_machine.table_statuses(), {c.value for c in Chore.Status}
         )
 
-    def test_table_holds_exactly_the_seven_legal_pairs(self):
+    def test_table_holds_exactly_the_eight_legal_pairs(self):
         pairs = {
             (action, from_status)
             for action, moves in TRANSITIONS.items()
@@ -102,6 +102,7 @@ class TransitionTableTests(SimpleTestCase):
             pairs,
             {
                 (CLAIM, AVAILABLE),
+                (CLAIM, CLAIMED),
                 (CLAIM, RETURNED),
                 (COMPLETE, CLAIMED),
                 (APPROVE, AWAITING_APPROVAL),
@@ -116,11 +117,14 @@ class TransitionTableTests(SimpleTestCase):
             with self.subTest(action=action):
                 self.assertNotIn(APPROVED, moves)
 
-    def test_no_action_is_a_self_transition(self):
+    def test_only_shared_claim_is_a_self_transition(self):
         for action, moves in TRANSITIONS.items():
             for from_status, to_status in moves.items():
                 with self.subTest(action=action, status=from_status):
-                    self.assertNotEqual(from_status, to_status)
+                    if action == CLAIM and from_status == CLAIMED:
+                        self.assertEqual(to_status, CLAIMED)
+                    else:
+                        self.assertNotEqual(from_status, to_status)
 
     def test_each_action_has_exactly_one_target_status(self):
         for action, moves in TRANSITIONS.items():
@@ -423,8 +427,8 @@ class IllegalTransitionTests(ChoreTransitionTestCase):
             if status not in TRANSITIONS[action]
         ]
 
-    def test_there_are_eighteen_illegal_pairs(self):
-        self.assertEqual(len(self.illegal_pairs()), 18)
+    def test_there_are_seventeen_illegal_pairs(self):
+        self.assertEqual(len(self.illegal_pairs()), 17)
         self.assertEqual(len(TRANSITIONS) * len(Chore.Status), 25)
 
     def test_every_illegal_pair_raises_and_changes_nothing(self):
@@ -487,16 +491,15 @@ class IllegalTransitionTests(ChoreTransitionTestCase):
 
         self.assertEqual(Chore.objects.get(pk=chore.pk).approved_at, original)
 
-    def test_complete_requires_an_assigned_child_even_when_claimed(self):
+    def test_complete_uses_the_claim_when_the_legacy_pointer_is_missing(self):
         chore = self.claimed_chore()
         # Simulate a row hand-edited around the state machine.
         Chore.objects.filter(pk=chore.pk).update(assigned_child=None)
         chore = Chore.objects.get(pk=chore.pk)
-        before = snapshot(chore)
-
-        with self.assertRaises(InvalidChoreTransition):
-            chore.complete()
-        self.assertEqual(snapshot(chore), before)
+        chore.complete(child=self.ana)
+        self.assertEqual(
+            Chore.objects.get(pk=chore.pk).status, AWAITING_APPROVAL
+        )
 
     def test_approve_requires_an_assigned_child(self):
         chore = self.awaiting_chore()
@@ -596,12 +599,15 @@ class ClaimEligibilityTests(ChoreTransitionTestCase):
         chore.claim(self.ana)
         self.assertEqual(Chore.objects.get(pk=chore.pk).status, CLAIMED)
 
-    def test_second_child_cannot_claim_an_already_claimed_chore(self):
+    def test_second_child_can_claim_an_already_claimed_shared_chore(self):
         chore = self.claimed_chore(self.ana, is_shared=True)
-        before = snapshot(chore)
-        with self.assertRaises(InvalidChoreTransition):
-            chore.claim(self.bob)
-        self.assertEqual(snapshot(chore), before)
+        chore.claim(self.bob)
+        fresh = Chore.objects.get(pk=chore.pk)
+        self.assertEqual(fresh.assigned_child_id, self.ana.pk)
+        self.assertEqual(
+            list(fresh.claims.values_list("child_id", flat=True)),
+            [self.ana.pk, self.bob.pk],
+        )
 
     def test_reclaiming_after_a_return_overwrites_claimed_at(self):
         chore = self.returned_chore()
@@ -637,8 +643,7 @@ class AllowedActionsTests(ChoreTransitionTestCase):
         chore = self.make_chore(is_shared=True, assigned_child=self.ana)
         self.assertEqual(chore.allowed_actions(self.bob), [CLAIM])
 
-    def test_child_argument_does_not_add_actions(self):
+    def test_child_argument_restricts_completion_actions_to_claimants(self):
         chore = self.claimed_chore()
-        self.assertEqual(
-            set(chore.allowed_actions(self.bob)), {COMPLETE, RELEASE}
-        )
+        self.assertEqual(set(chore.allowed_actions(self.ana)), {COMPLETE, RELEASE})
+        self.assertEqual(chore.allowed_actions(self.bob), [])

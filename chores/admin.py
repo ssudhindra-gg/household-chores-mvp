@@ -9,7 +9,15 @@ from django.utils import timezone
 
 from .forms import PayoutForm, RejectSelectedForm
 from .limits import weekly_limit_warning
-from .models import Child, Chore, ChoreEvent, ChoreRequest, Payout, RecurrenceRule
+from .models import (
+    Child,
+    Chore,
+    ChoreClaim,
+    ChoreEvent,
+    ChoreRequest,
+    Payout,
+    RecurrenceRule,
+)
 from .payouts import record_payout
 from .recurrence import RecurrenceError
 from .request_flow import RequestDecisionError, accept_request, decline_request
@@ -98,11 +106,32 @@ class ChoreEventInline(admin.TabularInline):
         return False
 
 
+class ChoreClaimInline(admin.TabularInline):
+    """Read-only claimant and reward-share history for a chore."""
+
+    model = ChoreClaim
+    extra = 0
+    max_num = 0
+    can_delete = False
+    fields = ("child", "claimed_at", "completed_at", "reward_share")
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Chore)
 class ChoreAdmin(admin.ModelAdmin):
     list_display = (
         "title",
         "status",
+        "claimants_display",
         "assigned_child",
         "category",
         "priority",
@@ -113,7 +142,16 @@ class ChoreAdmin(admin.ModelAdmin):
     search_fields = ("title", "notes", "assigned_child__name")
     list_per_page = 25
     actions = ("approve_selected", "reject_selected")
-    inlines = (ChoreEventInline,)
+    inlines = (ChoreClaimInline, ChoreEventInline)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "assigned_child"
+        ).prefetch_related("claims__child")
+
+    @admin.display(description="Claimants")
+    def claimants_display(self, obj):
+        return ", ".join(child.name for child in obj.claimants) or "—"
 
     def get_inline_instances(self, request, obj=None):
         # A chore that does not exist yet has no history, and the add page
