@@ -1,6 +1,7 @@
 <tr id="chore-{{ chore.pk }}">
-  <td>
+  <td><strong>
     {{ chore.title }}
+    </strong>
     {% if chore.reminder_state == "upcoming" %}
       <span class="reminder reminder-upcoming">Upcoming reminder</span>
     {% elif chore.reminder_state == "overdue" %}
@@ -8,15 +9,15 @@
     {% endif %}
   </td>
   <td>{{ chore.get_category_display }}</td>
-  <td>{{ chore.get_priority_display }}</td>
-  <td>{{ chore.get_status_display }}</td>
-  <td>
+  <td><span class="priority-pill{% if chore.priority == 'urgent' %} urgent{% endif %}">{{ chore.get_priority_display }}</span></td>
+  <td><span class="status-pill status-{{ chore.status }}">{{ chore.get_status_display }}</span></td>
+  <td class="claimant-list">
     {% for claimant in chore.claimants %}
-      {% if not forloop.first %}, {% endif %}{{ claimant.name }}
+      <span class="claimant">{{ claimant.name }}</span>
     {% empty %}Unassigned/shared{% endfor %}
   </td>
-  <td>{% if chore.reward_amount is not None %}{{ chore.reward_amount }}{% else %}Unpaid{% endif %}</td>
-  <td>
+  <td class="reward{% if chore.reward_amount is None %} unpaid{% endif %}">{% if chore.reward_amount is not None %}${{ chore.reward_amount }}{% else %}Unpaid{% endif %}</td>
+  <td class="action-stack">
     {% if is_kid_mode and current_child %}
       {% if "claim" in chore.kid_actions %}
         <form method="post" action="{% url 'chores:claim_chore' chore.pk %}" hx-post="{% url 'chores:claim_chore' chore.pk %}" hx-target="#chore-{{ chore.pk }}" hx-swap="outerHTML">

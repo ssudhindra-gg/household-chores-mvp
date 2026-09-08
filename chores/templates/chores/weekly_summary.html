@@ -3,10 +3,9 @@
 {% block title %}Weekly family summary | Household Chores{% endblock %}
 
 {% block content %}
-  <main>
-    <h1>Weekly family summary</h1>
-    <p>{{ week_start|date:"M j, Y" }} through {{ week_end|date:"M j, Y" }}</p>
-    <table>
+  <main class="page-shell">
+    <section class="page-heading"><div><p class="eyebrow">A little reflection</p><h1>Weekly family summary</h1><p class="lede">{{ week_start|date:"M j, Y" }} through {{ week_end|date:"M j, Y" }}</p></div></section>
+    <div class="table-card"><table class="data-table">
       <thead>
         <tr><th>Child</th><th>Approved chores</th><th>Earned</th></tr>
       </thead>
@@ -21,6 +20,6 @@
           <tr><td colspan="3">No children yet.</td></tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   </main>
 {% endblock %}

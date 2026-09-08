@@ -3,10 +3,19 @@
 {% block title %}Family Chore Board{% endblock %}
 
 {% block content %}
-    <main>
-      <h1>Family Chore Board</h1>
+    <main class="page-shell">
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow">The household rhythm</p>
+          <h1>Family Chore Board</h1>
+          <p class="lede">See what needs doing, who has it, and what small win comes next.</p>
+        </div>
+        {% if is_parent_mode %}
+          <a class="button" href="{% url 'chores:chore_create' %}">+ Add a chore</a>
+        {% endif %}
+      </section>
 
-      <form method="get" action="{% url 'chores:family_board' %}">
+      <form class="panel filter-panel filter-grid" method="get" action="{% url 'chores:family_board' %}">
         <label>Child
           <select name="child">
             <option value="">All children</option>
@@ -39,11 +48,12 @@
             {% endfor %}
           </select>
         </label>
-        <button type="submit">Filter</button>
+        <button type="submit">Filter board</button>
       </form>
 
       {% if chores %}
-        <table>
+        <div class="table-card">
+        <table class="data-table">
           <thead>
             <tr><th>Title</th><th>Category</th><th>Priority</th><th>Status</th><th>Assigned child</th><th>Reward</th><th>Actions</th></tr>
           </thead>
@@ -51,8 +61,9 @@
             {% for chore in chores %}{% include "chores/_chore_row.html" %}{% endfor %}
           </tbody>
         </table>
+        </div>
       {% else %}
-        <p>No chores match these filters.</p>
+        <section class="panel empty-state"><p>No chores match these filters.</p></section>
       {% endif %}
     </main>
 {% endblock %}

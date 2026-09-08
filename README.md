@@ -1,14 +1,57 @@
 # Household Chores
 
-Household Chores is a small, browser-based Django application for managing chores across a family. Parents create, assign, approve, and pay out chores; children use Kid Mode to find work, claim chores, complete them, and submit requests.
+![Python](https://img.shields.io/badge/Python-3.14%2B-3776AB?logo=python&logoColor=white) ![Django](https://img.shields.io/badge/Django-6.0-092E20?logo=django&logoColor=white) ![SQLite](https://img.shields.io/badge/Database-SQLite-003B57?logo=sqlite&logoColor=white) ![Tests](https://img.shields.io/badge/tests-291%20passing-178B85)
+
+<img src="chores/static/chores/chores-hero.svg" alt="A cheerful household chore checklist" width="420">
+
+Household Chores is a browser-based family chore board. Parents create, assign, approve, and pay out chores; children use Kid Mode to find work, claim chores, complete them, and submit requests.
 
 The project is intentionally desktop-first and local-first. It uses SQLite, server-rendered Django templates, Django Admin for parent workflows, and HTMX for small interactive updates.
+
+## Problem
+
+Household chores are easy to discuss and surprisingly hard to coordinate. Families need one shared place to answer three questions: what needs doing, who is responsible, and what happens after it is finished. A spreadsheet can list work, but it does not enforce a lifecycle, preserve approval history, or handle shared chores and rewards cleanly.
+
+This project turns that workflow into a small, understandable web application designed for a shared household device or a trusted home network.
+
+## See it locally
+
+There is no public deployment yet. Run the app locally and open the mode selector at [`http://127.0.0.1:8000/mode/`](http://127.0.0.1:8000/mode/). The local SVG above previews the visual language used by the app; the application itself provides the interactive board, dashboard, and admin workflows.
+
+The shortest useful walkthrough is:
+
+1. Enter Parent Mode and create a chore.
+2. Choose Kid Mode for a child and claim the chore.
+3. Complete it from the board.
+4. Return to Admin, approve or reject it, and inspect the activity history.
+
+For a shared chore, repeat the claim step as another child. Each claimant remains visible and receives an exact-cent reward share after approval.
 
 ## MVP status
 
 The MVP checkpoint is complete through the multi-claimant shared-chore work. The delivered scope includes the core chore lifecycle, Parent/Kid Mode, the family board, child dashboard, requests, recurrence, payouts and balances, weekly limit warnings, activity history, and shared chores with multiple claimants.
 
 Later GitHub issues are follow-up work outside this MVP checkpoint. They include items such as stronger concurrency handling, additional give-back UI, per-claim completion rules, and configurable reward-split rules.
+
+## Quickstart
+
+### Prerequisites
+
+- Python 3.14 or newer
+- [`uv`](https://docs.astral.sh/uv/)
+
+```powershell
+git clone https://github.com/ssudhindra-gg/household-chores-mvp.git
+cd household-chores-mvp
+uv sync
+uv run python manage.py migrate
+uv run python manage.py createsuperuser
+uv run python manage.py runserver 127.0.0.1:8000
+```
+
+Then open <http://127.0.0.1:8000/mode/>. Use <http://127.0.0.1:8000/admin/> for the authenticated parent administration area.
+
+The project has no required API keys, cloud services, containers, or external datasets. The default database is the repository-local `db.sqlite3` file.
 
 ## Features
 
@@ -75,6 +118,23 @@ The main application is in the `chores` Django app. Domain rules are deliberatel
 - `chores/modes.py` implements the session-scoped Parent/Kid Mode switch.
 - `chores/views.py` and `chores/templates/` provide the board, dashboard, editors, and actions.
 - `chores/admin.py` provides parent approval, rejection, payout, claimant, and activity workflows.
+
+### Request and data flow
+
+```mermaid
+flowchart LR
+    Browser[Family browser] --> Views[Django views]
+    Views --> Mode[Parent/Kid mode guard]
+    Views --> State[State machine]
+    State --> ORM[Django ORM]
+    ORM --> DB[(SQLite)]
+    State --> Events[Immutable activity events]
+    State --> Rewards[Decimal reward allocation]
+    Rewards --> Balances[Derived balances]
+    Admin[Django Admin] --> State
+```
+
+The state machine is the shared write boundary for board actions and parent workflows. The database stores the facts; balances and reminder labels are derived when needed.
 
 ## Data model
 
@@ -174,6 +234,10 @@ uv run python manage.py makemigrations --check --dry-run
 
 The MVP checkpoint currently verifies with 291 passing tests and 157 passing subtests.
 
+The suite covers model transitions, shared-claim behavior, reward allocation, derived balances, migrations, board filters, Kid Mode actions, dashboard scoping, admin workflows, payouts, recurrence, and activity history.
+
+There is currently no CI/CD workflow or public deployment. Verification is run locally before a logical commit and push.
+
 ## Project workflow
 
 Work is organized around GitHub Issues. The intended lifecycle is:
@@ -187,6 +251,34 @@ Work is organized around GitHub Issues. The intended lifecycle is:
 7. Commit at logical points and push the verified work.
 
 The process details live in [`_docs/process.md`](_docs/process.md). The architecture decision record is [`_docs/architecture.md`](_docs/architecture.md), and groomed task notes live in [`_docs/tasks/`](_docs/tasks/).
+
+## Design decisions and trade-offs
+
+- **Django over a smaller framework:** Django Admin covers parent approvals, filtering, search, and read-only history with little custom infrastructure.
+- **SQLite over a hosted database:** the MVP should be easy to clone and run on a household machine. A production deployment would need a stronger database and deployment settings.
+- **Derived balances over a stored counter:** recalculating from approved rewards and immutable payouts avoids drift between a balance and its source rows.
+- **An assigned-child compatibility pointer plus `ChoreClaim`:** existing single-claim data remains readable while shared chores gain a normalized claim history.
+- **Server-rendered templates plus HTMX:** the app stays simple to run while claim and completion actions can update one board row without a full-page refresh.
+
+## Limitations and future work
+
+- The application does not authenticate family members in the main UI; Parent/Kid Mode is a convenience boundary, not security. Django Admin still requires staff authentication.
+- It is not configured for public production deployment: `DEBUG=True`, a development secret key, SQLite, and local static-file serving are intentional development defaults.
+- Concurrent claims are not yet protected by a dedicated locking strategy.
+- Give-back controls, per-claim completion policies, and configurable reward-split policies are planned follow-up work.
+- There is no hosted demo, screenshot gallery, or automated CI pipeline yet.
+
+These boundaries are explicit so the README distinguishes implemented behavior from planned work.
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `uv` is not recognized | Install `uv`, reopen the terminal, and rerun `uv sync`. |
+| The app reports unapplied migrations | Run `uv run python manage.py migrate`. |
+| Admin login fails | Create an account with `uv run python manage.py createsuperuser`; app mode selection is separate from Admin login. |
+| Port 8000 is busy | Run `uv run python manage.py runserver 127.0.0.1:8001` and open the matching URL. |
+| Static styles are missing | Confirm the server is running with `DEBUG=True` and reload the page. The CSS lives in `chores/static/chores/app.css`. |
 
 ## Repository layout
 

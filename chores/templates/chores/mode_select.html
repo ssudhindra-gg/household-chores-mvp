@@ -3,29 +3,45 @@
 {% block title %}Choose Mode | Household Chores{% endblock %}
 
 {% block content %}
-  <main>
-    <h1>Choose a mode</h1>
+  <main class="page-shell">
+    <section class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Welcome home</p>
+        <h1>Make the little things feel lighter.</h1>
+        <p class="lede">A shared place for the chores, rewards, and routines that keep a household moving.</p>
+        <div class="hero-actions">
+          <form method="post" action="{% url 'chores:mode_select' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button type="submit" name="mode" value="parent">Enter Parent Mode</button>
+          </form>
+          <span class="mode-chip" data-current-mode="{% if is_parent_mode %}parent{% else %}kid{% endif %}">
+            {% if is_parent_mode %}Parent Mode is active{% else %}Kid Mode is active{% if current_child %} for {{ current_child.name }}{% endif %}{% endif %}
+          </span>
+        </div>
+      </div>
+      {% load static %}<img class="hero-art" src="{% static 'chores/chores-hero.svg' %}" alt="Illustration of a cheerful chore checklist">
+    </section>
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
-    <p data-current-mode="{% if is_parent_mode %}parent{% else %}kid{% endif %}">
-      {% if is_parent_mode %}Parent Mode is active.{% else %}Kid Mode is active{% if current_child %} for {{ current_child.name }}{% endif %}.{% endif %}
-    </p>
-    <form method="post" action="{% url 'chores:mode_select' %}">
-      {% csrf_token %}
-      <input type="hidden" name="next" value="{{ request.get_full_path }}">
-      <button type="submit" name="mode" value="parent">Parent Mode</button>
-    </form>
-    {% if children %}
+    <section class="panel" style="margin-top: 2.5rem;">
+      <p class="eyebrow">Choose your view</p>
       <h2>Kid Mode</h2>
-      {% for child in children %}
-        <form method="post" action="{% url 'chores:mode_select' %}">
-          {% csrf_token %}
-          <input type="hidden" name="next" value="{{ request.get_full_path }}">
-          <input type="hidden" name="mode" value="kid">
-          <button type="submit" name="child" value="{{ child.pk }}">Kid Mode: {{ child.name }}</button>
-        </form>
-      {% endfor %}
-    {% else %}
-      <p>No children exist yet. Add one before entering Kid Mode.</p>
-    {% endif %}
+      {% if children %}
+        <div class="mode-card-grid">
+          {% for child in children %}
+            <div class="mode-card">
+              <form method="post" action="{% url 'chores:mode_select' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <input type="hidden" name="mode" value="kid">
+                <button type="submit" name="child" value="{{ child.pk }}">Kid Mode: {{ child.name }}</button>
+              </form>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="empty-state">No children exist yet. Add one before entering Kid Mode.</p>
+      {% endif %}
+    </section>
   </main>
 {% endblock %}

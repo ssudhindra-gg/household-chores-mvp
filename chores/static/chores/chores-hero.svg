@@ -1,0 +1,25 @@
+<svg width="520" height="420" viewBox="0 0 520 420" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">A cheerful household chore board</title>
+  <desc id="desc">A stylized clipboard with task cards, a sun, and small decorative shapes.</desc>
+  <rect x="42" y="42" width="436" height="320" rx="42" fill="#E7F5F2"/>
+  <circle cx="419" cy="87" r="42" fill="#F5BB5B"/>
+  <path d="M419 31V17M419 157v14M482 87h14M342 87h-14M463 43l10-10M375 131l-10 10M463 131l10 10M375 43l-10-10" stroke="#EF836B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M117 92c0-16 13-29 29-29h228c16 0 29 13 29 29v226c0 16-13 29-29 29H146c-16 0-29-13-29-29V92Z" fill="white" stroke="#203047" stroke-width="8"/>
+  <path d="M200 71c0-20 16-36 36-36h48c20 0 36 16 36 36v25H200V71Z" fill="#178B85" stroke="#203047" stroke-width="8"/>
+  <circle cx="260" cy="74" r="10" fill="#F5BB5B"/>
+  <rect x="153" y="127" width="217" height="45" rx="14" fill="#FFF0EB"/>
+  <circle cx="179" cy="149" r="12" fill="#EF836B"/>
+  <path d="m174 149 4 4 8-9" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M207 148h126" stroke="#203047" stroke-width="9" stroke-linecap="round"/>
+  <rect x="153" y="188" width="217" height="45" rx="14" fill="#E7F5F2"/>
+  <circle cx="179" cy="210" r="12" fill="#178B85"/>
+  <path d="m174 210 4 4 8-9" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M207 209h104" stroke="#203047" stroke-width="9" stroke-linecap="round"/>
+  <rect x="153" y="249" width="217" height="45" rx="14" fill="#FFF5D9"/>
+  <circle cx="179" cy="271" r="12" fill="#F5BB5B"/>
+  <path d="M207 270h116" stroke="#203047" stroke-width="9" stroke-linecap="round"/>
+  <path d="M74 326c-15 8-20 24-14 37 7 15 26 20 41 11 10-6 15-16 14-27" stroke="#EF836B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M421 294c17-13 38-8 47 8 9 16 3 36-13 45-11 6-23 5-33-2" stroke="#178B85" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="87" cy="92" r="7" fill="#203047"/>
+  <circle cx="447" cy="350" r="7" fill="#203047"/>
+</svg>

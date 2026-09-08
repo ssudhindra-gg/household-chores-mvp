@@ -1,11 +1,18 @@
+{% load static %}
 <!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>{% block title %}Household Chores{% endblock %}</title></head>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#203047">
+    <title>{% block title %}Household Chores{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'chores/app.css' %}">
+  </head>
   <body>
     {% include "chores/_mode_bar.html" %}
     <div id="messages">
       {% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}
     </div>
-    {% block content %}{% endblock %}
+    <div class="page-transition">{% block content %}{% endblock %}</div>
   </body>
 </html>

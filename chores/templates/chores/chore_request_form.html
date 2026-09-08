@@ -3,9 +3,9 @@
 {% block title %}Request a chore | Household Chores{% endblock %}
 
 {% block content %}
-  <main>
-    <h1>Request a chore</h1>
-    <form method="post">
+  <main class="page-shell">
+    <section class="page-heading"><div><p class="eyebrow">Make your voice count</p><h1>Request a chore</h1><p class="lede">Have an idea that would help at home? Put it on the family board.</p></div></section>
+    <form class="panel form-panel" method="post">
       {% csrf_token %}
       <input type="hidden" name="next" value="{% url 'chores:family_board' %}">
       {{ form.as_p }}
