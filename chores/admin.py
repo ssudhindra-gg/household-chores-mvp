@@ -13,7 +13,7 @@ from .models import Child, Chore, ChoreRequest, Payout, RecurrenceRule
 from .payouts import record_payout
 from .recurrence import RecurrenceError
 from .request_flow import RequestDecisionError, accept_request, decline_request
-from .state_machine import InvalidChoreTransition
+from .state_machine import PARENT, InvalidChoreTransition
 
 admin.site.register(Child)
 
@@ -40,7 +40,7 @@ class ChoreAdmin(admin.ModelAdmin):
         failures = []
         for chore in queryset:
             try:
-                chore.approve()
+                chore.approve(actor_mode=PARENT)
             except (InvalidChoreTransition, RecurrenceError, ValidationError) as exc:
                 failures.append(f"{chore.pk}: {exc}")
             else:
@@ -87,7 +87,7 @@ class ChoreAdmin(admin.ModelAdmin):
         with transaction.atomic():
             for chore in queryset:
                 try:
-                    chore.reject(reason)
+                    chore.reject(reason, actor_mode=PARENT)
                 except (InvalidChoreTransition, ValidationError) as exc:
                     failures.append(f"{chore.pk}: {exc}")
                 else:

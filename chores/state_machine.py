@@ -10,13 +10,20 @@ module imports nothing from :mod:`chores.models` and there is no import cycle:
 ``models`` depends on ``state_machine``, never the other way round. A test
 asserts the strings here and the ``TextChoices`` set stay in step.
 
-Scope: status, ``assigned_child``, the three milestone timestamps and
-``rejection_reason``. No money arithmetic lives here -- crediting a reward on
-approval hooks into the single :func:`approve` code path later.
+The append-only activity row every transition writes goes through
+:mod:`chores.activity`, which is the seam that keeps that rule true: it
+imports the model inside the function body, not at module level.
+
+Scope: status, ``assigned_child``, the three milestone timestamps,
+``rejection_reason`` and the activity row. No money arithmetic lives here --
+crediting a reward on approval hooks into the single :func:`approve` code
+path later.
 """
 
 from django.db import transaction
 from django.utils import timezone
+
+from chores import activity
 
 # --- Actions -------------------------------------------------------------
 
@@ -33,6 +40,22 @@ CLAIMED = "claimed"
 AWAITING_APPROVAL = "awaiting_approval"
 APPROVED = "approved"
 RETURNED = "returned"
+
+# --- Actor modes (the stored values of ``ChoreEvent.ActorMode``) ---------
+#
+# Plain strings for the same reason the statuses are: this module must not
+# import ``chores.models`` (nor ``chores.modes``, which imports it). A test
+# asserts these and the ``TextChoices`` set stay in step, exactly as one does
+# for the statuses.
+#
+# The state machine records the actor. It never *branches* on it: no
+# transition is allowed or refused because of who asked for it.
+
+PARENT = "parent"
+KID = "kid"
+SYSTEM = "system"
+
+ACTOR_MODES = (PARENT, KID, SYSTEM)
 
 # --- The whole legal transition table ------------------------------------
 #
@@ -206,41 +229,91 @@ def _require_assigned_child(chore, action):
         raise InvalidChoreTransition(chore, action, "it has no assigned child")
 
 
-def apply_transition(chore, action, child=None, reason=None):
-    """Apply ``action`` to ``chore`` and save it. Returns ``None``.
+def _normalise_actor_mode(actor_mode):
+    """Return ``actor_mode`` as one of the three plain strings, or raise.
+
+    ``chores.modes.Mode`` is a ``str``-mixin ``Enum`` whose ``str()`` is
+    ``"Mode.KID"``, not ``"kid"``, so a member handed straight to the ORM
+    would store the wrong text. Unwrapping ``.value`` keeps callers free to
+    pass either a member or the bare string without this module importing
+    ``chores.modes`` (which would import ``chores.models``).
+    """
+    value = getattr(actor_mode, "value", actor_mode)
+    if value not in ACTOR_MODES:
+        raise ValueError(f"Unknown actor mode: {actor_mode!r}")
+    return value
+
+
+def apply_transition(chore, action, child=None, reason=None, actor_mode=SYSTEM):
+    """Apply ``action`` to ``chore``, save it and record it. Returns ``None``.
 
     The caller never calls ``save()``. Only the fields this transition
     changes are written, plus ``updated_at`` -- with ``update_fields``,
     Django refreshes an ``auto_now`` column only when it is named.
+
+    Every successful transition also appends one immutable ``ChoreEvent``,
+    written here rather than by the caller so no entry point can forget one,
+    and inside the *same* transaction as the save so the two cannot come
+    apart. A refused transition raises out of ``_fields_to_write()`` before
+    anything is mutated, and so records nothing.
+
+    ``actor_mode`` defaults to ``SYSTEM``: a shell, a test or a management
+    command acting without a session is correctly recorded as the system,
+    not treated as an error.
     """
-    updates = _fields_to_write(chore, action, child, reason, timezone.now())
+    actor_mode = _normalise_actor_mode(actor_mode)
+    now = timezone.now()
+
+    # Read before mutating: ``release`` clears ``assigned_child`` and
+    # ``claim`` overwrites it, so the event's own view of the transition has
+    # to be taken first.
+    from_status = chore.status
+    updates = _fields_to_write(chore, action, child, reason, now)
+    to_status = TRANSITIONS[action][from_status]
+    # Derived, never passed in: whoever the caller named (only ``claim``
+    # takes a child), else the child already on the chore when a kid acts.
+    acting_child = child if child is not None else (
+        chore.assigned_child if actor_mode == KID else None
+    )
 
     with transaction.atomic():
         for field, value in updates.items():
             setattr(chore, field, value)
         chore.save(update_fields=[*updates, "updated_at"])
+        # Table-driven: nothing below names an action, so a sixth row in
+        # ``TRANSITIONS`` is recorded without touching this code.
+        activity.record_event(
+            chore=chore,
+            action=action,
+            from_status=from_status,
+            to_status=to_status,
+            actor_mode=actor_mode,
+            acting_child=acting_child,
+            reason=updates.get("rejection_reason", ""),
+            occurred_at=now,
+        )
 
 
-def claim(chore, child):
+def claim(chore, child, actor_mode=SYSTEM):
     """``available``/``returned`` -> ``claimed``, owned by ``child``."""
-    apply_transition(chore, CLAIM, child=child)
+    apply_transition(chore, CLAIM, child=child, actor_mode=actor_mode)
 
 
-def complete(chore):
+def complete(chore, actor_mode=SYSTEM):
     """``claimed`` -> ``awaiting_approval``."""
-    apply_transition(chore, COMPLETE)
+    apply_transition(chore, COMPLETE, actor_mode=actor_mode)
 
 
-def approve(chore):
+def approve(chore, actor_mode=SYSTEM):
     """``awaiting_approval`` -> ``approved``. Terminal; no money logic."""
-    apply_transition(chore, APPROVE)
+    apply_transition(chore, APPROVE, actor_mode=actor_mode)
 
 
-def reject(chore, reason):
+def reject(chore, reason, actor_mode=SYSTEM):
     """``awaiting_approval`` -> ``returned``, recording why."""
-    apply_transition(chore, REJECT, reason=reason)
+    apply_transition(chore, REJECT, reason=reason, actor_mode=actor_mode)
 
 
-def release(chore):
+def release(chore, actor_mode=SYSTEM):
     """``claimed``/``returned`` -> ``available``, giving the chore back."""
-    apply_transition(chore, RELEASE)
+    apply_transition(chore, RELEASE, actor_mode=actor_mode)

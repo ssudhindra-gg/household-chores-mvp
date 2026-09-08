@@ -32,7 +32,7 @@ from .models import (
 from .balances import unpaid_balance
 from .payouts import record_payout
 from .reminders import reminder_state
-from .state_machine import InvalidChoreTransition
+from .state_machine import KID, PARENT, InvalidChoreTransition
 from .summary import weekly_family_summary
 
 
@@ -244,7 +244,7 @@ def claim_chore(request, chore_id):
     chore = get_object_or_404(Chore, pk=chore_id)
     child = request.acting_child
     try:
-        chore.claim(child)
+        chore.claim(child, actor_mode=KID)
     except (InvalidChoreTransition, ValidationError) as exc:
         return _action_error(request, str(exc))
     return _action_success(request, chore)
@@ -255,7 +255,7 @@ def claim_chore(request, chore_id):
 def complete_chore(request, chore_id):
     chore = get_object_or_404(Chore, pk=chore_id)
     try:
-        chore.complete()
+        chore.complete(actor_mode=KID)
     except (InvalidChoreTransition, ValidationError) as exc:
         return _action_error(request, str(exc))
     return _action_success(request, chore)
@@ -266,7 +266,7 @@ def complete_chore(request, chore_id):
 def approve_chore(request, chore_id):
     chore = get_object_or_404(Chore, pk=chore_id)
     try:
-        chore.approve()
+        chore.approve(actor_mode=PARENT)
     except (InvalidChoreTransition, ValidationError) as exc:
         return _bad_domain_request(str(exc))
     return redirect(_next_url(request))
@@ -277,7 +277,7 @@ def approve_chore(request, chore_id):
 def reject_chore(request, chore_id):
     chore = get_object_or_404(Chore, pk=chore_id)
     try:
-        chore.reject(request.POST.get("reason", ""))
+        chore.reject(request.POST.get("reason", ""), actor_mode=PARENT)
     except (InvalidChoreTransition, ValidationError) as exc:
         return _bad_domain_request(str(exc))
     return redirect(_next_url(request))

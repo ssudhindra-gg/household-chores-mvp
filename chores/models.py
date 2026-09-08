@@ -252,30 +252,30 @@ class Chore(models.Model):
     # rule is restated here. Each method mutates and saves ``self``, so no
     # caller ever needs ``save()``, and each returns ``None``.
 
-    def claim(self, child):
+    def claim(self, child, actor_mode=state_machine.SYSTEM):
         """Take this chore on: ``available``/``returned`` -> ``claimed``."""
-        state_machine.claim(self, child)
+        state_machine.claim(self, child, actor_mode=actor_mode)
 
-    def complete(self):
+    def complete(self, actor_mode=state_machine.SYSTEM):
         """Hand it in: ``claimed`` -> ``awaiting_approval``."""
-        state_machine.complete(self)
+        state_machine.complete(self, actor_mode=actor_mode)
 
-    def approve(self):
+    def approve(self, actor_mode=state_machine.SYSTEM):
         """Sign it off: ``awaiting_approval`` -> ``approved`` (terminal)."""
         with transaction.atomic():
-            state_machine.approve(self)
+            state_machine.approve(self, actor_mode=actor_mode)
             if self.recurrence_rule_id:
                 from chores.recurrence import advance_recurring_chore
 
                 advance_recurring_chore(self)
 
-    def reject(self, reason):
+    def reject(self, reason, actor_mode=state_machine.SYSTEM):
         """Send it back: ``awaiting_approval`` -> ``returned``, with a reason."""
-        state_machine.reject(self, reason)
+        state_machine.reject(self, reason, actor_mode=actor_mode)
 
-    def release(self):
+    def release(self, actor_mode=state_machine.SYSTEM):
         """Give it back: ``claimed``/``returned`` -> ``available``."""
-        state_machine.release(self)
+        state_machine.release(self, actor_mode=actor_mode)
 
     def allowed_actions(self, child=None):
         """Action names legal right now, for deciding which buttons to show."""
@@ -340,6 +340,103 @@ class Payout(models.Model):
 
     def delete(self, *args, **kwargs):
         raise PayoutImmutable("Payouts are append-only and cannot be deleted")
+
+
+class ChoreEventImmutable(Exception):
+    """Raised whenever a recorded chore event would be edited or deleted."""
+
+
+class ChoreEventQuerySet(models.QuerySet):
+    """An activity history cannot be rewritten or removed in bulk."""
+
+    def update(self, *args, **kwargs):
+        raise ChoreEventImmutable("Chore events are append-only and cannot be edited")
+
+    def delete(self, *args, **kwargs):
+        raise ChoreEventImmutable("Chore events are append-only and cannot be deleted")
+
+
+class ChoreEvent(models.Model):
+    """One append-only row per successful chore status transition.
+
+    Written from exactly one place -- ``state_machine.apply_transition()`` --
+    inside the same transaction as the status save, so a chore is never saved
+    without its event and an event never survives a rolled-back save. Nothing
+    else may create one, and nothing at all may edit or delete one: the same
+    append-only shape :class:`Payout` uses.
+
+    The milestone columns on :class:`Chore` remain the authoritative "when did
+    this last happen"; this table is the additive record of *every* time it
+    happened, including the reasons and claimants those columns overwrite.
+    """
+
+    class ActorMode(models.TextChoices):
+        PARENT = "parent", "Parent"
+        KID = "kid", "Kid"
+        SYSTEM = "system", "System"
+
+    chore = models.ForeignKey(
+        Chore,
+        on_delete=models.CASCADE,
+        related_name="events",
+        help_text="The chore this happened to.",
+    )
+    action = models.CharField(
+        max_length=20,
+        help_text="The state machine action that was applied.",
+    )
+    from_status = models.CharField(max_length=20, choices=ChoreStatus.choices)
+    to_status = models.CharField(max_length=20, choices=ChoreStatus.choices)
+    actor_mode = models.CharField(max_length=20, choices=ActorMode.choices)
+    acting_child = models.ForeignKey(
+        Child,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="chore_events",
+        help_text="NULL for parent and system actions.",
+    )
+    reason = models.TextField(
+        blank=True,
+        default="",
+        help_text="The rejection reason for a reject, empty otherwise.",
+    )
+    # Deliberately not ``auto_now_add``: the state machine sets this to the
+    # very same instant it writes into the chore's milestone timestamps.
+    occurred_at = models.DateTimeField()
+
+    objects = ChoreEventQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-occurred_at", "-id"]
+        indexes = [
+            models.Index(fields=["chore", "occurred_at"], name="chore_event_time_idx")
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(from_status=""), name="chore_event_from_status_set"
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(to_status=""), name="chore_event_to_status_set"
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(actor_mode=""), name="chore_event_actor_mode_set"
+            ),
+        ]
+
+    def __str__(self):
+        # Local columns only, so it never triggers an extra query.
+        return f"{self.action}: {self.from_status} -> {self.to_status}"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ChoreEventImmutable(
+                "Chore events are append-only and cannot be edited"
+            )
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ChoreEventImmutable("Chore events are append-only and cannot be deleted")
 
 
 class ChoreRequest(models.Model):
