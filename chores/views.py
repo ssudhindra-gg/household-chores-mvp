@@ -18,6 +18,7 @@ from .modes import (
     set_mode,
 )
 from .forms import ChoreForm, ChoreRequestForm
+from .limits import current_week_bounds
 from .models import (
     Child,
     Chore,
@@ -29,6 +30,7 @@ from .models import (
 from .payouts import record_payout
 from .reminders import reminder_state
 from .state_machine import InvalidChoreTransition
+from .summary import weekly_family_summary
 
 
 def _next_url(request):
@@ -118,6 +120,21 @@ def family_board(request):
     )
     patch_vary_headers(response, ["Cookie"])
     return response
+
+
+@require_GET
+@parent_mode_required
+def weekly_summary(request):
+    start, end = current_week_bounds()
+    return render(
+        request,
+        "chores/weekly_summary.html",
+        {
+            "summary": weekly_family_summary(),
+            "week_start": start,
+            "week_end": end,
+        },
+    )
 
 
 def _editor_redirect(request):

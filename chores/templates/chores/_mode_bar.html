@@ -17,6 +17,7 @@
   {% if is_parent_mode %}
     {# Presentation only: Admin has its own staff login and mode does not protect it. #}
     <a href="{% url 'admin:index' %}">Admin</a>
+    <a href="{% url 'chores:weekly_summary' %}">Weekly summary</a>
   {% else %}
     <a href="{% url 'chores:request_chore' %}">Request a chore</a>
   {% endif %}

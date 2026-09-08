@@ -1,0 +1,26 @@
+{% extends "chores/base.html" %}
+
+{% block title %}Weekly family summary | Household Chores{% endblock %}
+
+{% block content %}
+  <main>
+    <h1>Weekly family summary</h1>
+    <p>{{ week_start|date:"M j, Y" }} through {{ week_end|date:"M j, Y" }}</p>
+    <table>
+      <thead>
+        <tr><th>Child</th><th>Approved chores</th><th>Earned</th></tr>
+      </thead>
+      <tbody>
+        {% for row in summary %}
+          <tr>
+            <td>{{ row.child.name }}</td>
+            <td>{{ row.completed }}</td>
+            <td>{{ row.earned }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3">No children yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </main>
+{% endblock %}
